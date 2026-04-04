@@ -64,6 +64,73 @@ def _get_transport_headers(msg):
         return ""
 
 
+def _coerce_datetime(value):
+    if not hasattr(value, "year"):
+        return None
+    try:
+        if hasattr(value, "tzinfo") and value.tzinfo is not None:
+            value = value.replace(tzinfo=None)
+        return datetime(
+            value.year,
+            value.month,
+            value.day,
+            getattr(value, "hour", 0),
+            getattr(value, "minute", 0),
+            getattr(value, "second", 0),
+            getattr(value, "microsecond", 0),
+        )
+    except Exception:
+        return None
+
+
+def _matches_text_filter(record, filter_text):
+    if not filter_text:
+        return True
+    needle = filter_text.lower()
+    haystacks = [
+        record.get("from", ""),
+        record.get("from_email", ""),
+        record.get("subject", ""),
+        record.get("body", ""),
+        record.get("full_body", ""),
+    ]
+    return any(needle in str(haystack or "").lower() for haystack in haystacks)
+
+
+def _matches_structured_filters(record, filter_from="", filter_to="", filter_subject=""):
+    from_value = str(record.get("from", "") or "").lower()
+    from_email = str(record.get("from_email", "") or "").lower()
+    to_value = str(record.get("to_recipients", "") or "").lower()
+    cc_value = str(record.get("cc_recipients", "") or "").lower()
+    subject_value = str(record.get("subject", "") or "").lower()
+
+    if filter_from:
+        needle = filter_from.lower()
+        if needle not in from_value and needle not in from_email:
+            return False
+
+    if filter_to:
+        needle = filter_to.lower()
+        if needle not in to_value and needle not in cc_value:
+            return False
+
+    if filter_subject:
+        needle = filter_subject.lower()
+        if needle not in subject_value:
+            return False
+
+    return True
+
+
+def _iter_mail_folders(folder):
+    yield folder
+    try:
+        for child in folder.Folders:
+            yield from _iter_mail_folders(child)
+    except Exception:
+        return
+
+
 def _recipient_strings(msg):
     to_str = ""
     cc_str = ""
@@ -150,33 +217,47 @@ def pick_mode():
         print()
         print("  Date range options:")
         print("  a. Today")
-        print("  b. Last 7 days")
-        print("  c. Last 30 days")
-        print("  d. Custom date (YYYY-MM-DD)")
-        sub = input("  Choose [a/b/c/d]: ").strip().lower()
+        print("  b. Yesterday")
+        print("  c. Last 3 days")
+        print("  d. Last 7 days")
+        print("  e. Custom date range (YYYY-MM-DD)")
+        sub = input("  Choose [a/b/c/d/e]: ").strip().lower()
         now = datetime.now()
         if sub == "a":
             since = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            until = None
             label = "emails from today"
         elif sub == "b":
-            since = now - timedelta(days=7)
-            label = "emails from the last 7 days"
+            since = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            until = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            label = "emails from yesterday"
         elif sub == "c":
-            since = now - timedelta(days=30)
-            label = "emails from the last 30 days"
+            since = now - timedelta(days=3)
+            until = None
+            label = "emails from the last 3 days"
         elif sub == "d":
-            raw = input("  Enter start date (YYYY-MM-DD): ").strip()
+            since = now - timedelta(days=7)
+            until = None
+            label = "emails from the last 7 days"
+        elif sub == "e":
+            raw_start = input("  Enter start date (YYYY-MM-DD): ").strip()
+            raw_end = input("  Enter end date (YYYY-MM-DD): ").strip()
             try:
-                since = datetime.strptime(raw, "%Y-%m-%d")
-                label = f"emails since {raw}"
+                since = datetime.strptime(raw_start, "%Y-%m-%d")
+                until = datetime.strptime(raw_end, "%Y-%m-%d") + timedelta(days=1)
+                if until <= since:
+                    raise ValueError
+                label = f"emails from {raw_start} to {raw_end}"
             except ValueError:
-                print("  Invalid date format, defaulting to last 7 days.")
+                print("  Invalid date range, defaulting to last 7 days.")
                 since = now - timedelta(days=7)
+                until = None
                 label = "emails from the last 7 days"
         else:
             since = now - timedelta(days=7)
+            until = None
             label = "emails from the last 7 days"
-        return {"mode": "date", "since": since, "label": label}
+        return {"mode": "date", "since": since, "until": until, "label": label}
 
     raw = input("  How many recent emails? [press Enter for 30]: ").strip()
     count = int(raw) if raw.isdigit() else 30
@@ -192,29 +273,56 @@ def get_outlook_emails(mode_config):
 
         namespace = outlook.GetNamespace("MAPI")
         inbox = namespace.GetDefaultFolder(6)  # 6 = olFolderInbox
-        messages = inbox.Items
-        messages.Sort("[ReceivedTime]", True)  # Newest first
-
         mode = mode_config["mode"]
         max_count = mode_config.get("count", 500)
         since = mode_config.get("since")
+        until = mode_config.get("until")
+        filter_text = mode_config.get("filter_text", "")
+        filter_from = mode_config.get("filter_from", "")
+        filter_to = mode_config.get("filter_to", "")
+        filter_subject = mode_config.get("filter_subject", "")
+        unread_only = bool(mode_config.get("filter_unread"))
+        attachments_only = bool(mode_config.get("filter_attach"))
+        include_subfolders = bool(mode_config.get("include_subfolders"))
+        folders = list(_iter_mail_folders(inbox)) if include_subfolders else [inbox]
 
         emails = []
-        count = 0
-        for msg in messages:
-            if mode == "quantity" and count >= max_count:
-                break
+        for folder in folders:
             try:
-                if mode == "unread" and not msg.UnRead:
-                    continue
-                received = getattr(msg, "ReceivedTime", None)
-                if hasattr(received, "strftime") and mode == "date" and since and received < since:
-                    break
-                record = build_email_record(msg, index=count + 1)
-                emails.append(record)
-                count += 1
+                messages = folder.Items
+                messages.Sort("[ReceivedTime]", True)  # Newest first
             except Exception:
                 continue
+
+            for msg in messages:
+                try:
+                    if mode == "unread" and not msg.UnRead:
+                        continue
+                    received = getattr(msg, "ReceivedTime", None)
+                    received_dt = _coerce_datetime(received)
+                    if received_dt and mode == "date" and until and received_dt >= until:
+                        continue
+                    if received_dt and mode == "date" and since and received_dt < since:
+                        continue
+                    record = build_email_record(msg)
+                    if mode == "date":
+                        if unread_only and not record.get("unread"):
+                            continue
+                        if attachments_only and not record.get("has_attachment"):
+                            continue
+                        if not _matches_structured_filters(record, filter_from, filter_to, filter_subject):
+                            continue
+                        if not _matches_text_filter(record, filter_text):
+                            continue
+                    emails.append(record)
+                except Exception:
+                    continue
+
+        emails.sort(key=lambda item: item.get("received_sort", ""), reverse=True)
+        if mode == "quantity":
+            emails = emails[:max_count]
+        for index, email in enumerate(emails, start=1):
+            email["index"] = index
 
         return emails
 

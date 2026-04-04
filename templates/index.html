@@ -42,13 +42,31 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .sub-options.visible{display:block}
 .sub-options label{font-size:.77rem;font-weight:600;color:#666;display:block;margin-bottom:8px}
 .date-pills{display:flex;gap:6px;flex-wrap:wrap}
-.pill{border:1.5px solid #e2e8f0;border-radius:16px;padding:4px 11px;font-size:.75rem;cursor:pointer;background:#fff;transition:all .15s}
-.pill:hover{border-color:#6c63ff}
-.pill.active{border-color:#6c63ff;background:#6c63ff;color:#fff}
-.custom-date-row{display:none;margin-top:9px;align-items:center;gap:8px}
+.pill{border:1.5px solid #e2e8f0;border-radius:16px;padding:4px 11px;font-size:.75rem;font-weight:600;cursor:pointer;background:#fff;color:#4a5568;transition:all .15s}
+.pill:hover{border-color:#6c63ff;color:#5a52e0}
+#date-options .pill.active{border-color:#6c63ff;background:#6c63ff;color:#fff;box-shadow:0 0 0 2px rgba(108,99,255,.18)}
+.custom-date-row{display:none;margin-top:9px;align-items:flex-end;gap:8px;flex-wrap:wrap}
 .custom-date-row.visible{display:flex}
+.custom-date-field{display:flex;flex-direction:column;gap:4px;flex:1;min-width:115px}
+.custom-date-field label{font-size:.7rem;font-weight:700;color:#8b90a7}
 .custom-date-row input{border:1.5px solid #e2e8f0;border-radius:7px;padding:5px 8px;font-size:.78rem;outline:none;width:100%}
 .custom-date-row input:focus{border-color:#6c63ff}
+.date-filter-box{margin-top:10px;padding-top:10px;border-top:1px solid #eef2f7;display:flex;flex-direction:column;gap:8px}
+.date-filter-box label{font-size:.7rem;font-weight:700;color:#8b90a7}
+.date-filter-box input[type=text]{border:1.5px solid #e2e8f0;border-radius:7px;padding:6px 9px;font-size:.78rem;outline:none;width:100%;background:#fff}
+.date-filter-box input[type=text]:focus{border-color:#6c63ff}
+.date-filter-header{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.filter-hint{font-size:.7rem;color:#8b90a7;line-height:1.45}
+.filter-tools{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.filter-refresh{border:1px solid #d6d3f5;background:#f7f5ff;color:#6c63ff;border-radius:999px;padding:4px 10px;font-size:.72rem;font-weight:700;cursor:pointer;transition:all .15s}
+.filter-refresh:hover{border-color:#6c63ff;background:#efeaff}
+.date-filter-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.date-filter-checks{display:flex;gap:12px;flex-wrap:wrap}
+.date-filter-checks label{display:flex;align-items:center;gap:6px;font-size:.74rem;font-weight:600;color:#666}
+.date-filter-checks input{accent-color:#6c63ff}
+.folder-scope{margin-top:10px;padding-top:10px;border-top:1px solid #eef2f7}
+.folder-scope label{display:flex;align-items:center;gap:8px;font-size:.75rem;font-weight:600;color:#666}
+.folder-scope input{accent-color:#6c63ff}
 .qty-row{display:flex;align-items:center;gap:10px}
 .qty-row input[type=range]{flex:1;accent-color:#6c63ff}
 .qty-label{font-weight:700;color:#6c63ff;min-width:24px;font-size:.9rem;text-align:right}
@@ -146,9 +164,16 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .keepers-empty{color:#d6d3f5;font-size:.82rem;text-align:center;padding:10px 0;pointer-events:none}
 .watch-thread{background:#f9f8ff;border:1px solid #e9d8fd;border-radius:10px;padding:10px 12px;margin-bottom:8px}
 .watch-thread.has-new-activity{border-color:#b794f4;box-shadow:0 0 0 3px rgba(183,148,244,.12)}
+.watch-thread.dragging{opacity:.45}
+.watch-thread.reorder-target-top{box-shadow:inset 0 3px 0 #6c63ff}
+.watch-thread.reorder-target-bottom{box-shadow:inset 0 -3px 0 #6c63ff}
 .watch-thread:last-child{margin-bottom:0}
 .thread-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
 .thread-main{flex:1;min-width:0}
+.thread-leading{display:flex;align-items:flex-start;gap:8px}
+.thread-drag{color:#6c63ff;font-size:.72rem;font-weight:700;cursor:grab;user-select:none;flex-shrink:0;padding:4px 10px;border:1px dashed #c4b5fd;border-radius:999px;line-height:1;background:#f7f5ff;display:inline-flex;align-items:center;gap:5px}
+.thread-drag-icon{font-size:.8rem;line-height:1}
+.thread-drag:active{cursor:grabbing}
 .thread-toggle{display:flex;align-items:center;gap:8px;cursor:pointer}
 .thread-chevron{font-size:.72rem;color:#9f7aea;transition:transform .15s}
 .thread-chevron.collapsed{transform:rotate(-90deg)}
@@ -286,6 +311,16 @@ body.dark-mode .watch-thread,
 body.dark-mode .email-card,
 body.dark-mode .modal,
 body.dark-mode .add-rule-form{background:#181d29;border-color:#2a3245;color:#eef2ff}
+body.dark-mode .pill{background:#151b27;border-color:#364158;color:#cbd5e1}
+body.dark-mode .pill:hover{border-color:#6c63ff;color:#eef2ff}
+body.dark-mode #date-options .pill.active{background:#6c63ff;border-color:#8b84ff;color:#fff;box-shadow:0 0 0 2px rgba(108,99,255,.24)}
+body.dark-mode .custom-date-field label{color:#8f9ab3}
+body.dark-mode .date-filter-box{border-top-color:#2a3245}
+body.dark-mode .date-filter-box label,
+body.dark-mode .date-filter-checks label{color:#8f9ab3}
+body.dark-mode .date-filter-box input[type=text]{background:#151b27;color:#eef2ff;border-color:#364158}
+body.dark-mode .folder-scope{border-top-color:#2a3245}
+body.dark-mode .folder-scope label{color:#8f9ab3}
 body.dark-mode .mode-card.active{background:#23283a;box-shadow:0 0 0 3px rgba(108,99,255,.18)}
 body.dark-mode .stat-box{background:#151b27;border-color:#252d40}
 body.dark-mode .sender-row,
@@ -311,7 +346,10 @@ body.dark-mode .open-hint,
 body.dark-mode .auto-refresh-label,
 body.dark-mode .auto-refresh-toggle,
 body.dark-mode .auto-refresh-status,
-body.dark-mode .auto-refresh-last{color:#8f9ab3}
+body.dark-mode .auto-refresh-last,
+body.dark-mode .filter-hint{color:#8f9ab3}
+body.dark-mode .filter-refresh{border-color:#51607e;color:#c6b7ff;background:#23283a}
+body.dark-mode .filter-refresh:hover{border-color:#c6b7ff;background:#2a3245}
 body.dark-mode .summary-ref{background:#23283a;border-color:#51607e;color:#c6b7ff}
 body.dark-mode .keepers-panel{background:#181d29;border-color:#51607e}
 body.dark-mode .keepers-panel.drop-active{background:#23283a}
@@ -332,6 +370,7 @@ body.dark-mode .thread-count{background:#23283a;color:#c6b7ff}
 body.dark-mode .thread-updated{background:#1f2d3d;color:#90cdf4}
 body.dark-mode .keeper-remove{background:#2a1820;border-color:#6b2737;color:#feb2b2}
 body.dark-mode .keeper-remove:hover{background:#321c25;border-color:#fc8181;color:#fed7d7}
+body.dark-mode .thread-drag{border-color:#51607e;color:#c6b7ff;background:#23283a}
 body.dark-mode .replies-count{background:#23283a;border-color:#51607e;color:#c6b7ff}
 body.dark-mode .reply-result{background:#151b27;border-color:#2a3245}
 body.dark-mode .reply-drag{border-color:#51607e;color:#c6b7ff;background:#23283a}
@@ -376,7 +415,7 @@ body.dark-mode .modal-overlay{background:rgba(0,0,0,.65)}
         </div>
         <div class="mode-card" onclick="selectMode('date',this)">
           <div class="mode-icon">D</div>
-          <div><div class="mode-title">By Date</div><div class="mode-desc">Today, last 7/30 days, or custom</div></div>
+          <div><div class="mode-title">By Date</div><div class="mode-desc">Today, yesterday, last 3/7 days, or custom</div></div>
         </div>
       </div>
 
@@ -385,13 +424,54 @@ body.dark-mode .modal-overlay{background:rgba(0,0,0,.65)}
         <label>Date range</label>
         <div class="date-pills">
           <div class="pill active" onclick="selectRange('today',this)">Today</div>
+          <div class="pill" onclick="selectRange('yesterday',this)">Yesterday</div>
+          <div class="pill" onclick="selectRange('3days',this)">3 days</div>
           <div class="pill" onclick="selectRange('7days',this)">7 days</div>
-          <div class="pill" onclick="selectRange('30days',this)">30 days</div>
-          <div class="pill" onclick="selectRange('custom',this)">Custom...</div>
+          <div class="pill" onclick="selectRange('custom',this)">Custom range</div>
         </div>
         <div id="custom-date-row" class="custom-date-row">
-          <input type="date" id="custom-date">
+          <div class="custom-date-field">
+            <label for="custom-start-date">From</label>
+            <input type="date" id="custom-start-date">
+          </div>
+          <div class="custom-date-field">
+            <label for="custom-end-date">To</label>
+            <input type="date" id="custom-end-date">
+          </div>
         </div>
+        <div class="date-filter-box">
+          <div class="date-filter-header">
+            <label>Search criteria</label>
+            <button class="filter-refresh" type="button" onclick="refreshSearchSuggestions()">Refresh suggestions</button>
+          </div>
+          <div class="filter-hint">Use Outlook-style filters like people in <strong>From</strong> or <strong>To</strong>, plus subject and keyword search across the selected date range.</div>
+          <div class="date-filter-grid">
+            <div>
+              <label for="date-filter-from">From</label>
+              <input type="text" id="date-filter-from" list="contact-suggestions" placeholder="Name or email, e.g. Tiago">
+            </div>
+            <div>
+              <label for="date-filter-to">To</label>
+              <input type="text" id="date-filter-to" list="contact-suggestions" placeholder="Name or email">
+            </div>
+          </div>
+          <div>
+            <label for="date-filter-subject">Subject Contains</label>
+            <input type="text" id="date-filter-subject" placeholder='Text in subject, e.g. "invoice"'>
+          </div>
+          <div>
+            <label for="date-filter-text">Keyword</label>
+            <input type="text" id="date-filter-text" placeholder="Extra text search in subject or body">
+          </div>
+          <div class="date-filter-checks">
+            <label><input type="checkbox" id="date-filter-unread"> Only unread</label>
+            <label><input type="checkbox" id="date-filter-attach"> Has attachments</label>
+          </div>
+        </div>
+        <div class="folder-scope">
+          <label><input type="checkbox" id="include-subfolders"> Include Inbox subfolders</label>
+        </div>
+        <datalist id="contact-suggestions"></datalist>
       </div>
 
       <!-- Quantity sub-options -->
@@ -605,6 +685,9 @@ let isSummaryRunning = false;
 let lastScanLabel = 'Last scan: not yet run';
 let watchedMessageCounts = new Map();
 let threadsWithFreshActivity = new Set();
+let searchSuggestionsLoaded = false;
+let searchSuggestionTimer = null;
+let lastSuggestionQuery = '';
 
 function applyTheme() {
   document.body.classList.toggle('dark-mode', darkMode);
@@ -636,7 +719,7 @@ function currentModeLabel(modeOverride = null) {
   const activeMode = modeOverride || currentMode;
   if (activeMode === 'unread') return 'Unread Inbox Summary';
   if (activeMode === 'date') {
-    const labels = {today:'Today', '7days':'Last 7 Days', '30days':'Last 30 Days', custom:'Custom Date'};
+    const labels = {today:'Today', yesterday:'Yesterday', '3days':'Last 3 Days', '7days':'Last 7 Days', custom:'Custom Date'};
     return `${labels[currentRange] || 'Date Range'} Summary`;
   }
   const count = document.getElementById('qty-slider').value;
@@ -679,6 +762,62 @@ function initAutoRefresh() {
   scheduleAutoRefresh();
 }
 
+function setDefaultCustomDates() {
+  const today = new Date();
+  const end = today.toISOString().slice(0, 10);
+  const startDate = new Date(today);
+  startDate.setDate(startDate.getDate() - 7);
+  const start = startDate.toISOString().slice(0, 10);
+  document.getElementById('custom-start-date').value = start;
+  document.getElementById('custom-end-date').value = end;
+}
+
+async function loadSearchSuggestions(query = '', forceRefresh = false) {
+  const trimmed = query.trim();
+  if (!forceRefresh && searchSuggestionsLoaded && trimmed === lastSuggestionQuery) return;
+  try {
+    const params = new URLSearchParams();
+    if (trimmed) params.set('q', trimmed);
+    if (forceRefresh) params.set('refresh', '1');
+    const url = '/search-suggestions' + (params.toString() ? `?${params.toString()}` : '');
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.ok) {
+      showToast('Warning: ' + data.error);
+      return false;
+    }
+    const list = document.getElementById('contact-suggestions');
+    list.innerHTML = (data.values || []).map(value => `<option value="${esc(value)}"></option>`).join('');
+    searchSuggestionsLoaded = true;
+    lastSuggestionQuery = trimmed;
+    return true;
+  } catch {
+    showToast('Warning: Could not refresh suggestions');
+    return false;
+  }
+}
+
+function queueSearchSuggestions(input) {
+  const value = input.value || '';
+  if (searchSuggestionTimer) clearTimeout(searchSuggestionTimer);
+  searchSuggestionTimer = setTimeout(() => loadSearchSuggestions(value), 180);
+}
+
+function initSearchSuggestionInputs() {
+  ['date-filter-from', 'date-filter-to'].forEach(id => {
+    const input = document.getElementById(id);
+    input.addEventListener('focus', () => loadSearchSuggestions(input.value || ''));
+    input.addEventListener('input', () => queueSearchSuggestions(input));
+  });
+}
+
+async function refreshSearchSuggestions() {
+  searchSuggestionsLoaded = false;
+  lastSuggestionQuery = '';
+  const ok = await loadSearchSuggestions('', true);
+  if (ok) showToast('Suggestions refreshed from Outlook');
+}
+
 // â”€â”€â”€ Mode / range â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function selectMode(mode, el) {
   currentMode = mode;
@@ -686,19 +825,35 @@ function selectMode(mode, el) {
   el.classList.add('active');
   document.getElementById('date-options').classList.toggle('visible', mode === 'date');
   document.getElementById('qty-options').classList.toggle('visible',  mode === 'quantity');
+  if (mode === 'date') loadSearchSuggestions();
 }
 function selectRange(range, el) {
   currentRange = range;
   document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
   el.classList.add('active');
   document.getElementById('custom-date-row').classList.toggle('visible', range === 'custom');
+  if (range === 'custom') {
+    if (!document.getElementById('custom-start-date').value || !document.getElementById('custom-end-date').value) {
+      setDefaultCustomDates();
+    }
+  }
 }
 function buildUrl(modeOverride) {
   const activeMode = modeOverride || currentMode;
   const p = new URLSearchParams({mode: activeMode});
+  if (document.getElementById('include-subfolders').checked) p.set('include_subfolders', '1');
   if (activeMode === 'date') {
     p.set('range', currentRange);
-    if (currentRange === 'custom') p.set('custom_date', document.getElementById('custom-date').value);
+    if (currentRange === 'custom') {
+      p.set('custom_start', document.getElementById('custom-start-date').value);
+      p.set('custom_end', document.getElementById('custom-end-date').value);
+    }
+    p.set('filter_from', document.getElementById('date-filter-from').value.trim());
+    p.set('filter_to', document.getElementById('date-filter-to').value.trim());
+    p.set('filter_subject', document.getElementById('date-filter-subject').value.trim());
+    p.set('filter_text', document.getElementById('date-filter-text').value.trim());
+    if (document.getElementById('date-filter-unread').checked) p.set('filter_unread', '1');
+    if (document.getElementById('date-filter-attach').checked) p.set('filter_attach', '1');
   }
   if (activeMode === 'quantity') p.set('count', document.getElementById('qty-slider').value);
   return '/summarize?' + p;
@@ -748,6 +903,17 @@ async function clearWatchingItems() {
   const res = await fetch('/watching/clear', {method:'POST'});
   const data = await res.json();
   if (data.ok) keepers = [];
+  return data;
+}
+
+async function saveWatchingOrder(threadIds) {
+  const res = await fetch('/watching/reorder', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({thread_ids: threadIds})
+  });
+  const data = await res.json();
+  if (data.ok) keepers = data.threads || data.items || [];
   return data;
 }
 
@@ -1084,6 +1250,33 @@ function threadBadges(message) {
   return badges.length ? `<div class="thread-badges">${badges.join('')}</div>` : '';
 }
 
+function clearWatchingReorderHints() {
+  document.querySelectorAll('.watch-thread.reorder-target-top, .watch-thread.reorder-target-bottom').forEach(card => {
+    card.classList.remove('reorder-target-top', 'reorder-target-bottom');
+  });
+}
+
+async function reorderWatchingThreads(draggedThreadId, targetThreadId, placeAfter = false) {
+  const draggedId = Number(draggedThreadId);
+  const targetId = Number(targetThreadId);
+  if (!draggedId || !targetId || draggedId === targetId) return;
+
+  const order = keepers.map(thread => thread.thread_id);
+  const draggedIndex = order.indexOf(draggedId);
+  const targetIndex = order.indexOf(targetId);
+  if (draggedIndex === -1 || targetIndex === -1) return;
+
+  order.splice(draggedIndex, 1);
+  let insertIndex = targetIndex;
+  if (draggedIndex < targetIndex) insertIndex -= 1;
+  if (placeAfter) insertIndex += 1;
+  order.splice(insertIndex, 0, draggedId);
+
+  const data = await saveWatchingOrder(order);
+  renderKeepers();
+  showToast(data.ok ? 'Watching order saved' : 'Warning: ' + data.error);
+}
+
 function renderKeepers() {
   const panel = document.getElementById('keepers-panel');
   const list  = document.getElementById('keepers-list');
@@ -1091,7 +1284,7 @@ function renderKeepers() {
   list.innerHTML = '';
   panel.classList.add('visible');
   sub.textContent = keepers.length
-    ? `Watching ${keepers.length} thread${keepers.length !== 1 ? 's' : ''}. New activity rises to the top automatically.`
+    ? `Watching ${keepers.length} thread${keepers.length !== 1 ? 's' : ''}. Drag the thread chips to keep your preferred top-to-bottom order.`
     : 'Drag an email or matched reply here to subscribe to that conversation thread.';
 
   if (!keepers.length) {
@@ -1121,12 +1314,16 @@ function renderKeepers() {
 
     const card = document.createElement('div');
     card.className = `watch-thread${hasFreshActivity ? ' has-new-activity' : ''}`;
+    card.dataset.threadId = thread.thread_id;
     card.innerHTML = `
       <div class="thread-header">
         <div class="thread-main">
-          <div class="thread-toggle" onclick="toggleThread(${thread.thread_id})">
-            <span class="thread-chevron${isCollapsed ? ' collapsed' : ''}">▼</span>
-            <div class="thread-title">${esc(latestSubject)} <span class="thread-count">${messages.length}</span>${hasFreshActivity ? '<span class="thread-updated">Updated</span>' : ''}</div>
+          <div class="thread-leading">
+            <span class="thread-drag" draggable="true" title="Drag to reorder Watching"><span class="thread-drag-icon">::</span><span>Reorder</span></span>
+            <div class="thread-toggle" onclick="toggleThread(${thread.thread_id})">
+              <span class="thread-chevron${isCollapsed ? ' collapsed' : ''}">▼</span>
+              <div class="thread-title">${esc(latestSubject)} <span class="thread-count">${messages.length}</span>${hasFreshActivity ? '<span class="thread-updated">Updated</span>' : ''}</div>
+            </div>
           </div>
           <div class="thread-meta">${esc(thread.latest_from || 'Unknown')} - ${esc(thread.latest_received || '')}</div>
         </div>
@@ -1136,6 +1333,39 @@ function renderKeepers() {
         </div>
       </div>
       <div class="thread-messages${isCollapsed ? ' collapsed' : ''}">${messageHtml}</div>`;
+
+    const dragHandle = card.querySelector('.thread-drag');
+    dragHandle.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('application/x-watch-thread', String(thread.thread_id));
+      e.dataTransfer.effectAllowed = 'move';
+      setTimeout(() => card.classList.add('dragging'), 0);
+    });
+    dragHandle.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+      clearWatchingReorderHints();
+      keepersTray.classList.remove('drop-active');
+    });
+    card.addEventListener('dragover', e => {
+      if (!e.dataTransfer.types.includes('application/x-watch-thread')) return;
+      e.preventDefault();
+      clearWatchingReorderHints();
+      const rect = card.getBoundingClientRect();
+      const placeAfter = (e.clientY - rect.top) > (rect.height / 2);
+      card.classList.add(placeAfter ? 'reorder-target-bottom' : 'reorder-target-top');
+    });
+    card.addEventListener('dragleave', () => {
+      card.classList.remove('reorder-target-top', 'reorder-target-bottom');
+    });
+    card.addEventListener('drop', async e => {
+      const draggedThreadId = e.dataTransfer.getData('application/x-watch-thread');
+      if (!draggedThreadId) return;
+      e.preventDefault();
+      clearWatchingReorderHints();
+      keepersTray.classList.remove('drop-active');
+      const rect = card.getBoundingClientRect();
+      const placeAfter = (e.clientY - rect.top) > (rect.height / 2);
+      await reorderWatchingThreads(draggedThreadId, thread.thread_id, placeAfter);
+    });
     list.appendChild(card);
   });
 }
@@ -1152,10 +1382,25 @@ async function removeKeeper(threadId) {
 // Keepers drop zone
 const keepersTray = document.getElementById('keepers-panel');
 keepersTray.addEventListener('dragover', e => {
-  if (e.dataTransfer.types.includes('text/plain')) { e.preventDefault(); keepersTray.classList.add('drop-active'); }
+  if (e.dataTransfer.types.includes('text/plain') || e.dataTransfer.types.includes('application/x-watch-thread')) {
+    e.preventDefault();
+    if (!e.dataTransfer.types.includes('application/x-watch-thread')) keepersTray.classList.add('drop-active');
+  }
 });
-keepersTray.addEventListener('dragleave', () => keepersTray.classList.remove('drop-active'));
+keepersTray.addEventListener('dragleave', () => {
+  keepersTray.classList.remove('drop-active');
+  clearWatchingReorderHints();
+});
 keepersTray.addEventListener('drop', async e => {
+  const draggedThreadId = e.dataTransfer.getData('application/x-watch-thread');
+  if (draggedThreadId) {
+    e.preventDefault();
+    keepersTray.classList.remove('drop-active');
+    clearWatchingReorderHints();
+    const lastThread = keepers[keepers.length - 1];
+    if (lastThread) await reorderWatchingThreads(draggedThreadId, lastThread.thread_id, true);
+    return;
+  }
   keepersTray.classList.remove('drop-active');
   const id = e.dataTransfer.getData('text/plain');
   if (!id) return;
@@ -1276,6 +1521,8 @@ function showToast(msg) {
 }
 initTheme();
 initAutoRefresh();
+setDefaultCustomDates();
+initSearchSuggestionInputs();
 fetchWatching().then(renderKeepers);
 </script>
 </body>

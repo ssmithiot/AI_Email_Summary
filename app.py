@@ -194,35 +194,84 @@ def _build_local_summary(emails):
 
 def build_mode_config(args):
     mode = args.get("mode", "quantity")
+    include_subfolders = str(args.get("include_subfolders", "")).lower() in {"1", "true", "yes", "on"}
     if mode == "unread":
-        return {"mode": "unread", "label": "unread emails"}
+        label = "unread emails"
+        if include_subfolders:
+            label += " including Inbox subfolders"
+        return {"mode": "unread", "label": label, "include_subfolders": include_subfolders}
     if mode == "date":
         now = datetime.now()
         range_type = args.get("range", "7days")
+        filter_text = (args.get("filter_text", "") or "").strip()
+        filter_from = (args.get("filter_from", "") or "").strip()
+        filter_to = (args.get("filter_to", "") or "").strip()
+        filter_subject = (args.get("filter_subject", "") or "").strip()
+        unread_only = str(args.get("filter_unread", "")).lower() in {"1", "true", "yes", "on"}
+        attachments_only = str(args.get("filter_attach", "")).lower() in {"1", "true", "yes", "on"}
         if range_type == "today":
             since = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            until = None
             label = "emails from today"
-        elif range_type == "30days":
-            since = now - timedelta(days=30)
-            label = "emails from the last 30 days"
+        elif range_type == "yesterday":
+            since = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            until = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            label = "emails from yesterday"
+        elif range_type == "3days":
+            since = now - timedelta(days=3)
+            until = None
+            label = "emails from the last 3 days"
         elif range_type == "custom":
-            date_str = args.get("custom_date", "")
+            start_str = args.get("custom_start", "")
+            end_str = args.get("custom_end", "")
             try:
-                since = datetime.strptime(date_str, "%Y-%m-%d")
-                label = f"emails since {date_str}"
+                since = datetime.strptime(start_str, "%Y-%m-%d")
+                until = datetime.strptime(end_str, "%Y-%m-%d") + timedelta(days=1)
+                if until <= since:
+                    raise ValueError
+                label = f"emails from {start_str} to {end_str}"
             except ValueError:
                 since = now - timedelta(days=7)
+                until = None
                 label = "emails from the last 7 days"
         else:
             since = now - timedelta(days=7)
+            until = None
             label = "emails from the last 7 days"
-        return {"mode": "date", "since": since, "label": label}
+        if filter_from:
+            label += f" from '{filter_from}'"
+        if filter_to:
+            label += f" to '{filter_to}'"
+        if filter_subject:
+            label += f" subject '{filter_subject}'"
+        if filter_text:
+            label += f" keyword '{filter_text}'"
+        if unread_only:
+            label += " (unread only)"
+        if attachments_only:
+            label += " (attachments only)"
+        return {
+            "mode": "date",
+            "since": since,
+            "until": until,
+            "label": label,
+            "include_subfolders": include_subfolders,
+            "filter_text": filter_text,
+            "filter_from": filter_from,
+            "filter_to": filter_to,
+            "filter_subject": filter_subject,
+            "filter_unread": unread_only,
+            "filter_attach": attachments_only,
+        }
 
     try:
         count = max(1, int(args.get("count", 30)))
     except ValueError:
         count = 30
-    return {"mode": "quantity", "count": count, "label": f"{count} most recent emails"}
+    label = f"{count} most recent emails"
+    if include_subfolders:
+        label += " including Inbox subfolders"
+    return {"mode": "quantity", "count": count, "label": label, "include_subfolders": include_subfolders}
 
 
 def get_outlook_namespace():
@@ -408,6 +457,7 @@ def init_watching_db():
                 conversation_id TEXT,
                 normalized_subject TEXT NOT NULL,
                 subject TEXT NOT NULL,
+                order_index INTEGER NOT NULL DEFAULT 0,
                 latest_entry_id TEXT NOT NULL,
                 latest_subject TEXT NOT NULL,
                 latest_from TEXT NOT NULL,
@@ -446,12 +496,129 @@ def init_watching_db():
             CREATE INDEX IF NOT EXISTS idx_watched_messages_message_id ON watched_messages(internet_message_id);
             CREATE INDEX IF NOT EXISTS idx_watched_messages_conversation ON watched_messages(conversation_id);
             CREATE INDEX IF NOT EXISTS idx_watched_messages_subject ON watched_messages(normalized_subject);
+
+            CREATE TABLE IF NOT EXISTS search_suggestions_cache (
+                value TEXT PRIMARY KEY,
+                source TEXT NOT NULL DEFAULT 'unknown',
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
             """
         )
+        thread_columns = {row["name"] for row in conn.execute("PRAGMA table_info(watched_threads)").fetchall()}
+        if "order_index" not in thread_columns:
+            conn.execute("ALTER TABLE watched_threads ADD COLUMN order_index INTEGER NOT NULL DEFAULT 0")
+        zero_order_rows = conn.execute(
+            """
+            SELECT thread_id
+            FROM watched_threads
+            WHERE COALESCE(order_index, 0) = 0
+            ORDER BY created_at ASC, thread_id ASC
+            """
+        ).fetchall()
+        if zero_order_rows:
+            next_order = conn.execute("SELECT COALESCE(MAX(order_index), 0) FROM watched_threads").fetchone()[0]
+            conn.executemany(
+                "UPDATE watched_threads SET order_index = ? WHERE thread_id = ?",
+                [(next_order + index, row["thread_id"]) for index, row in enumerate(zero_order_rows, start=1)],
+            )
         _migrate_legacy_watching(conn)
         conn.commit()
     finally:
         conn.close()
+
+
+def _cache_suggestion_values(values, source="outlook"):
+    conn = get_db_connection()
+    try:
+        conn.executemany(
+            """
+            INSERT INTO search_suggestions_cache (value, source, updated_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(value) DO UPDATE SET
+                source = excluded.source,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            [(value, source) for value in values if str(value or "").strip()],
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _load_cached_suggestions(limit=300, query=""):
+    conn = get_db_connection()
+    try:
+        if query:
+            needle = f"%{query.lower()}%"
+            rows = conn.execute(
+                """
+                SELECT value
+                FROM search_suggestions_cache
+                WHERE lower(value) LIKE ?
+                ORDER BY value COLLATE NOCASE
+                LIMIT ?
+                """,
+                (needle, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT value
+                FROM search_suggestions_cache
+                ORDER BY value COLLATE NOCASE
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [row["value"] for row in rows]
+    finally:
+        conn.close()
+
+
+def _build_search_suggestions_from_outlook(limit_contacts=300, limit_items=200):
+    ns = get_outlook_namespace()
+    suggestions = set()
+
+    def add_value(value):
+        text = str(value or "").strip()
+        if text and len(text) >= 2:
+            suggestions.add(text)
+
+    try:
+        contacts = ns.GetDefaultFolder(10).Items
+        for index, item in enumerate(contacts):
+            if index >= limit_contacts:
+                break
+            add_value(getattr(item, "FullName", ""))
+            add_value(getattr(item, "CompanyName", ""))
+            add_value(getattr(item, "Email1Address", ""))
+            add_value(getattr(item, "Email2Address", ""))
+            add_value(getattr(item, "Email3Address", ""))
+        if suggestions:
+            _cache_suggestion_values(suggestions, source="contacts")
+    except Exception:
+        pass
+
+    for folder_id, field_names, sort_field in (
+        (6, ("SenderName", "SenderEmailAddress", "To"), "[ReceivedTime]"),
+        (5, ("To",), "[SentOn]"),
+    ):
+        local_values = set()
+        try:
+            items = ns.GetDefaultFolder(folder_id).Items
+            items.Sort(sort_field, True)
+            for index, item in enumerate(items):
+                if index >= limit_items:
+                    break
+                for field_name in field_names:
+                    add_value(getattr(item, field_name, ""))
+                    local_values.add(str(getattr(item, field_name, "") or "").strip())
+        except Exception:
+            continue
+        if local_values:
+            _cache_suggestion_values(local_values, source="mail")
+
+    return sorted(suggestions.union(_load_cached_suggestions(limit=limit_contacts + limit_items)), key=lambda value: value.lower())[:300]
 
 
 def _migrate_legacy_watching(conn):
@@ -484,7 +651,7 @@ def _load_watching_state(conn):
     thread_rows = conn.execute(
         """
         SELECT thread_id, seed_entry_id, conversation_id, normalized_subject, subject,
-               latest_entry_id, latest_subject, latest_from, latest_received,
+               order_index, latest_entry_id, latest_subject, latest_from, latest_received,
                latest_received_sort
         FROM watched_threads
         """
@@ -497,6 +664,7 @@ def _load_watching_state(conn):
             "conversation_id": row["conversation_id"] or "",
             "normalized_subject": row["normalized_subject"] or "",
             "subject": row["subject"] or "(No Subject)",
+            "order_index": row["order_index"],
             "latest_entry_id": row["latest_entry_id"],
             "latest_subject": row["latest_subject"],
             "latest_from": row["latest_from"],
@@ -581,19 +749,21 @@ def _register_email_in_state(state, thread_id, email, is_seed=False):
 
 
 def _create_thread(conn, state, email):
+    next_order = conn.execute("SELECT COALESCE(MAX(order_index), 0) + 1 FROM watched_threads").fetchone()[0]
     conn.execute(
         """
         INSERT INTO watched_threads (
-            seed_entry_id, conversation_id, normalized_subject, subject,
+            seed_entry_id, conversation_id, normalized_subject, subject, order_index,
             latest_entry_id, latest_subject, latest_from, latest_received,
             latest_received_sort
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             email.get("entry_id"),
             email.get("conversation_id") or None,
             email.get("normalized_subject") or normalize_subject(email.get("subject")),
             email.get("subject") or "(No Subject)",
+            next_order,
             email.get("entry_id"),
             email.get("subject") or "(No Subject)",
             email.get("from") or "Unknown",
@@ -608,6 +778,7 @@ def _create_thread(conn, state, email):
         "conversation_id": "",
         "normalized_subject": email.get("normalized_subject") or normalize_subject(email.get("subject")),
         "subject": email.get("subject") or "(No Subject)",
+        "order_index": next_order,
         "latest_entry_id": email.get("entry_id"),
         "latest_subject": email.get("subject") or "(No Subject)",
         "latest_from": email.get("from") or "Unknown",
@@ -649,6 +820,7 @@ def _refresh_thread_row(conn, state, thread_id):
             conversation_id = ?,
             normalized_subject = ?,
             subject = ?,
+            order_index = ?,
             latest_entry_id = ?,
             latest_subject = ?,
             latest_from = ?,
@@ -662,6 +834,7 @@ def _refresh_thread_row(conn, state, thread_id):
             thread.get("conversation_id") or None,
             thread.get("normalized_subject") or "",
             thread.get("subject") or thread.get("latest_subject") or "(No Subject)",
+            thread.get("order_index") or 0,
             thread.get("latest_entry_id") or thread.get("seed_entry_id"),
             thread.get("latest_subject") or thread.get("subject") or "(No Subject)",
             thread.get("latest_from") or "Unknown",
@@ -823,10 +996,11 @@ def list_watching_threads():
         thread_rows = conn.execute(
             """
             SELECT thread_id, seed_entry_id, conversation_id, normalized_subject, subject,
+                   order_index,
                    latest_entry_id, latest_subject, latest_from, latest_received,
                    latest_received_sort
             FROM watched_threads
-            ORDER BY latest_received_sort DESC, thread_id DESC
+            ORDER BY order_index ASC, thread_id ASC
             """
         ).fetchall()
         message_rows = conn.execute(
@@ -865,6 +1039,7 @@ def list_watching_threads():
                 "conversation_id": row["conversation_id"] or "",
                 "normalized_subject": row["normalized_subject"] or "",
                 "subject": row["subject"] or "(No Subject)",
+                "order_index": row["order_index"],
                 "latest_entry_id": row["latest_entry_id"],
                 "latest_subject": row["latest_subject"] or row["subject"] or "(No Subject)",
                 "latest_from": row["latest_from"] or "Unknown",
@@ -881,6 +1056,7 @@ def remove_watching_thread(thread_id):
     conn = get_db_connection()
     try:
         conn.execute("DELETE FROM watched_threads WHERE thread_id = ?", (thread_id,))
+        _normalize_watching_order(conn)
         conn.commit()
     finally:
         conn.close()
@@ -892,6 +1068,7 @@ def remove_watching_by_entry(entry_id):
         row = conn.execute("SELECT thread_id FROM watched_threads WHERE seed_entry_id = ?", (entry_id,)).fetchone()
         if row:
             conn.execute("DELETE FROM watched_threads WHERE thread_id = ?", (row["thread_id"],))
+            _normalize_watching_order(conn)
             conn.commit()
     finally:
         conn.close()
@@ -907,6 +1084,50 @@ def clear_watching_items():
 
 
 init_watching_db()
+
+
+def _normalize_watching_order(conn):
+    rows = conn.execute(
+        "SELECT thread_id FROM watched_threads ORDER BY order_index ASC, thread_id ASC"
+    ).fetchall()
+    conn.executemany(
+        "UPDATE watched_threads SET order_index = ?, updated_at = CURRENT_TIMESTAMP WHERE thread_id = ?",
+        [(index, row["thread_id"]) for index, row in enumerate(rows, start=1)],
+    )
+
+
+def reorder_watching_threads(thread_ids):
+    cleaned_ids = []
+    seen = set()
+    for raw_id in thread_ids or []:
+        try:
+            thread_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if thread_id in seen:
+            continue
+        seen.add(thread_id)
+        cleaned_ids.append(thread_id)
+
+    conn = get_db_connection()
+    try:
+        existing_ids = [row["thread_id"] for row in conn.execute(
+            "SELECT thread_id FROM watched_threads ORDER BY order_index ASC, thread_id ASC"
+        ).fetchall()]
+        if not existing_ids:
+            return []
+
+        remaining_ids = [thread_id for thread_id in existing_ids if thread_id not in seen]
+        final_ids = cleaned_ids + remaining_ids
+        conn.executemany(
+            "UPDATE watched_threads SET order_index = ?, updated_at = CURRENT_TIMESTAMP WHERE thread_id = ?",
+            [(index, thread_id) for index, thread_id in enumerate(final_ids, start=1)],
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return list_watching_threads()
 
 
 def _extract_response_text(response):
@@ -1150,6 +1371,13 @@ def clear_watching():
     return jsonify({"ok": True, "threads": [], "items": []})
 
 
+@app.route("/watching/reorder", methods=["POST"])
+def reorder_watching():
+    payload = request.json or {}
+    threads = reorder_watching_threads(payload.get("thread_ids") or [])
+    return jsonify({"ok": True, "threads": threads, "items": threads})
+
+
 @app.route("/check-replied", methods=["POST"])
 def check_replied():
     items = request.json.get("emails", [])
@@ -1258,6 +1486,21 @@ def my_identity():
         return jsonify({"ok": True, "email": (user.Address or "").lower(), "name": user.Name or ""})
     except Exception as exc:
         return jsonify({"ok": False, "error": _friendly_outlook_error(exc, "read your Outlook identity")}), 500
+
+
+@app.route("/search-suggestions")
+def search_suggestions():
+    try:
+        query = (request.args.get("q", "") or "").strip()
+        refresh = str(request.args.get("refresh", "")).lower() in {"1", "true", "yes", "on"}
+        cached = _load_cached_suggestions(limit=300, query=query)
+        if refresh or not cached:
+            _build_search_suggestions_from_outlook()
+            cached = _load_cached_suggestions(limit=300, query=query)
+        values = cached
+        return jsonify({"ok": True, "values": values})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": _friendly_outlook_error(exc, "read Outlook contacts")}), 500
 
 
 @app.route("/favicon.ico")
