@@ -22,5 +22,16 @@ if not exist .env (
     if errorlevel 1 exit /b 1
 )
 
+findstr /b /c:"OPENAI_API_KEY=sk-your-key-here" .env >nul 2>&1
+if not errorlevel 1 (
+    echo Your OpenAI API key still needs to be added.
+    echo Opening .env so you can paste it in now...
+    echo.
+    start "" notepad .env
+    echo After you save the key, run START_HERE.bat again.
+    pause
+    exit /b 1
+)
+
 echo Launching the app...
 call run_summary.bat

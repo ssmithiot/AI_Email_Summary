@@ -52,6 +52,16 @@ if not exist .env (
     echo .env already exists - skipping.
 )
 
+findstr /b /c:"OPENAI_API_KEY=sk-your-key-here" .env >nul 2>&1
+if not errorlevel 1 (
+    echo.
+    echo ============================================
+    echo  REMINDER: Your OpenAI API key is still a placeholder
+    echo ============================================
+    echo  Open .env and replace sk-your-key-here with your real key.
+    echo ============================================
+)
+
 echo.
 echo Setup complete!
 echo Run run_summary.bat to launch the browser app.

@@ -80,6 +80,8 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 /* Summary panel */
 .summary-panel{background:#fff;border-radius:12px;padding:20px 24px;border:1px solid #e2e8f0;display:none;flex-shrink:0}
 .summary-panel.visible{display:block}
+.summary-empty{padding:10px 0 2px;color:#8b90a7;font-size:.84rem;line-height:1.6}
+.summary-empty strong{color:#4a5568}
 
 /* â”€â”€ Quick Stats panel â”€â”€ */
 .stats-panel{background:#fff;border-radius:12px;padding:14px 18px;border:1px solid #e2e8f0;display:none;flex-shrink:0}
@@ -114,6 +116,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .reply-result-meta{font-size:.71rem;color:#8b90a7;margin-top:2px}
 .reply-result-note{font-size:.71rem;color:#b0b3c3;margin-top:3px}
 .reply-empty{font-size:.76rem;color:#aaa}
+.reply-callout{font-size:.71rem;color:#8b90a7;margin-bottom:8px;line-height:1.5}
 .summary-title{font-size:.82rem;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
 .status-msg{color:#aaa;font-size:.84rem;display:flex;align-items:center;gap:8px}
 .spinner{width:14px;height:14px;border:2px solid #ddd;border-top-color:#6c63ff;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
@@ -136,10 +139,12 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .keepers-panel.drop-active{border-color:#6c63ff;background:#f9f8ff}
 .keepers-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .keepers-label{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9f7aea}
+.keepers-sub{font-size:.72rem;color:#a0aec0;margin-bottom:10px}
 .keepers-clear{font-size:.72rem;color:#ccc;background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:4px}
 .keepers-clear:hover{color:#e53e3e}
 .keepers-empty{color:#d6d3f5;font-size:.82rem;text-align:center;padding:10px 0;pointer-events:none}
 .watch-thread{background:#f9f8ff;border:1px solid #e9d8fd;border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.watch-thread.has-new-activity{border-color:#b794f4;box-shadow:0 0 0 3px rgba(183,148,244,.12)}
 .watch-thread:last-child{margin-bottom:0}
 .thread-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
 .thread-main{flex:1;min-width:0}
@@ -149,6 +154,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .thread-title{font-size:.82rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .thread-meta{font-size:.71rem;color:#8b90a7;margin-top:2px}
 .thread-count{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#efeaff;color:#6c63ff;font-size:.65rem;font-weight:700}
+.thread-updated{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#ebf8ff;color:#2b6cb0;font-size:.65rem;font-weight:700}
 .thread-actions{display:flex;gap:5px;flex-shrink:0}
 .thread-messages{margin-top:10px;padding-top:10px;border-top:1px solid #e7def8}
 .thread-messages.collapsed{display:none}
@@ -305,6 +311,9 @@ body.dark-mode .summary-ref{background:#23283a;border-color:#51607e;color:#c6b7f
 body.dark-mode .keepers-panel{background:#181d29;border-color:#51607e}
 body.dark-mode .keepers-panel.drop-active{background:#23283a}
 body.dark-mode .keepers-empty{color:#7281a0}
+body.dark-mode .keepers-sub,
+body.dark-mode .reply-callout,
+body.dark-mode .summary-empty{color:#8f9ab3}
 body.dark-mode .thread-meta,
 body.dark-mode .thread-message-meta,
 body.dark-mode .reply-result-meta,
@@ -313,6 +322,7 @@ body.dark-mode .reply-empty{color:#8f9ab3}
 body.dark-mode .thread-messages{border-top-color:#2a3245}
 body.dark-mode .thread-message{border-bottom-color:#2a3245}
 body.dark-mode .thread-count{background:#23283a;color:#c6b7ff}
+body.dark-mode .thread-updated{background:#1f2d3d;color:#90cdf4}
 body.dark-mode .matched-rules-tip,
 body.dark-mode .keepers-label,
 body.dark-mode .sender-count{color:#c6b7ff}
@@ -426,7 +436,7 @@ body.dark-mode .modal-overlay{background:rgba(0,0,0,.65)}
             <div class="spinner"></div><span id="status-text"></span>
           </div>
           <div id="error" class="error-msg" style="display:none"></div>
-          <div id="output"></div>
+          <div id="output"><div class="summary-empty"><strong>Ready when you are.</strong><br>Choose a mode on the left, run a scan, and this panel will turn your inbox into an action-focused summary with clickable email links.</div></div>
         </div>
 
         <!-- Quick Stats -->
@@ -461,6 +471,7 @@ body.dark-mode .modal-overlay{background:rgba(0,0,0,.65)}
             <span class="replies-label">Replies Found</span>
             <span class="replies-count" id="replies-count">0</span>
           </div>
+          <div class="reply-callout" id="replies-callout">After you click Check Replies, matched sent responses will show up here with an Open button and drag-to-Watching support.</div>
           <div id="replies-list" class="reply-empty">Run Check Replies to see matched sent responses here.</div>
         </div>
 
@@ -475,6 +486,7 @@ body.dark-mode .modal-overlay{background:rgba(0,0,0,.65)}
             <span class="keepers-label">Watching</span>
             <button class="keepers-clear" onclick="clearKeepers()">Clear all</button>
           </div>
+          <div class="keepers-sub" id="keepers-sub">Drag an email or matched reply here to subscribe to that conversation thread.</div>
           <div id="keepers-list">
             <div class="keepers-empty" id="keepers-empty">Drag an email here to watch the whole conversation thread. New matching replies will join it automatically.</div>
           </div>
@@ -577,6 +589,8 @@ let autoRefreshMinutes = 5;
 let autoRefreshTimer = null;
 let isSummaryRunning = false;
 let lastScanLabel = 'Last scan: not yet run';
+let watchedMessageCounts = new Map();
+let threadsWithFreshActivity = new Set();
 
 function applyTheme() {
   document.body.classList.toggle('dark-mode', darkMode);
@@ -602,6 +616,17 @@ function updateAutoRefreshStatus() {
     return;
   }
   status.textContent = `Watching unread inbox every ${autoRefreshMinutes} minute${autoRefreshMinutes !== 1 ? 's' : ''}`;
+}
+
+function currentModeLabel(modeOverride = null) {
+  const activeMode = modeOverride || currentMode;
+  if (activeMode === 'unread') return 'Unread Inbox Summary';
+  if (activeMode === 'date') {
+    const labels = {today:'Today', '7days':'Last 7 Days', '30days':'Last 30 Days', custom:'Custom Date'};
+    return `${labels[currentRange] || 'Date Range'} Summary`;
+  }
+  const count = document.getElementById('qty-slider').value;
+  return `${count} Most Recent Emails`;
 }
 
 function scheduleAutoRefresh() {
@@ -674,11 +699,16 @@ function buildSummaryEmailMap(emails) {
 
 async function fetchWatching() {
   const previousIds = new Set(keepers.map(thread => thread.thread_id));
+  const previousCounts = new Map(keepers.map(thread => [thread.thread_id, (thread.messages || []).length]));
   const res = await fetch('/watching');
   const data = await res.json();
   keepers = data.ok ? (data.threads || data.items || []) : [];
   keepers.forEach(thread => {
     if (!previousIds.has(thread.thread_id)) collapsedThreads.add(thread.thread_id);
+    const previousCount = previousCounts.get(thread.thread_id) || 0;
+    const nextCount = (thread.messages || []).length;
+    if (previousIds.has(thread.thread_id) && nextCount > previousCount) threadsWithFreshActivity.add(thread.thread_id);
+    watchedMessageCounts.set(thread.thread_id, nextCount);
   });
 }
 
@@ -748,14 +778,17 @@ function renderReplyResults() {
   const panel = document.getElementById('replies-panel');
   const countEl = document.getElementById('replies-count');
   const list = document.getElementById('replies-list');
+  const callout = document.getElementById('replies-callout');
   countEl.textContent = `${replyResults.length}`;
-  panel.classList.toggle('visible', replyResults.length > 0);
+  panel.classList.add('visible');
   if (!replyResults.length) {
     list.className = 'reply-empty';
     list.textContent = 'Run Check Replies to see matched sent responses here.';
+    callout.textContent = 'After you click Check Replies, matched sent responses will show up here with an Open button and drag-to-Watching support.';
     return;
   }
 
+  callout.textContent = 'These are sent replies matched back to emails in the current summary. You can open them or drag them into Watching.';
   list.className = '';
   list.innerHTML = replyResults.map(item => `
     <div class="reply-result" data-entry-id="${esc(item.reply_entry_id || item.original_entry_id)}">
@@ -804,11 +837,12 @@ function runSummary(options = {}) {
   const cardsList = document.getElementById('cards-list');
   const replyBtn  = document.getElementById('reply-btn');
   const keepersP  = document.getElementById('keepers-panel');
-
+  const summaryTitle = document.getElementById('summary-title-text');
   const statsP = document.getElementById('stats-panel');
 
   btn.disabled = true; btn.textContent = '...';
   panel.classList.add('visible');
+  summaryTitle.textContent = currentModeLabel(modeOverride);
   status.style.display = 'flex'; errEl.style.display = 'none';
   output.innerHTML = ''; meta.textContent = '';
   cardsP.classList.remove('visible'); cardsList.innerHTML = '';
@@ -1015,6 +1049,8 @@ async function markAllRead() {
 async function clearKeepers() {
   await clearWatchingItems();
   collapsedThreads.clear();
+  threadsWithFreshActivity.clear();
+  watchedMessageCounts = new Map();
   renderKeepers();
   showToast('Watching cleared');
 }
@@ -1036,8 +1072,12 @@ function threadBadges(message) {
 function renderKeepers() {
   const panel = document.getElementById('keepers-panel');
   const list  = document.getElementById('keepers-list');
+  const sub = document.getElementById('keepers-sub');
   list.innerHTML = '';
-  panel.classList.toggle('visible', keepers.length > 0 || emailData.length > 0);
+  panel.classList.add('visible');
+  sub.textContent = keepers.length
+    ? `Watching ${keepers.length} thread${keepers.length !== 1 ? 's' : ''}. New activity rises to the top automatically.`
+    : 'Drag an email or matched reply here to subscribe to that conversation thread.';
 
   if (!keepers.length) {
     const empty = document.createElement('div');
@@ -1053,6 +1093,7 @@ function renderKeepers() {
     const messages = thread.messages || [];
     const latestEntryId = thread.latest_entry_id || thread.seed_entry_id;
     const latestSubject = thread.latest_subject || thread.subject || '(No Subject)';
+    const hasFreshActivity = threadsWithFreshActivity.has(thread.thread_id);
     const messageHtml = messages.map(message => `
       <div class="thread-message">
         <div class="thread-message-main" onclick="openEmail('${esc(message.entry_id)}')">
@@ -1064,13 +1105,13 @@ function renderKeepers() {
       </div>`).join('');
 
     const card = document.createElement('div');
-    card.className = 'watch-thread';
+    card.className = `watch-thread${hasFreshActivity ? ' has-new-activity' : ''}`;
     card.innerHTML = `
       <div class="thread-header">
         <div class="thread-main">
           <div class="thread-toggle" onclick="toggleThread(${thread.thread_id})">
             <span class="thread-chevron${isCollapsed ? ' collapsed' : ''}">▼</span>
-            <div class="thread-title">${esc(latestSubject)} <span class="thread-count">${messages.length}</span></div>
+            <div class="thread-title">${esc(latestSubject)} <span class="thread-count">${messages.length}</span>${hasFreshActivity ? '<span class="thread-updated">Updated</span>' : ''}</div>
           </div>
           <div class="thread-meta">${esc(thread.latest_from || 'Unknown')} - ${esc(thread.latest_received || '')}</div>
         </div>
@@ -1086,6 +1127,8 @@ function renderKeepers() {
 
 async function removeKeeper(threadId) {
   collapsedThreads.delete(threadId);
+  threadsWithFreshActivity.delete(threadId);
+  watchedMessageCounts.delete(threadId);
   const data = await deleteWatchingItem(threadId);
   renderKeepers();
   showToast(data.ok ? 'Removed from Watching' : 'Warning: ' + data.error);

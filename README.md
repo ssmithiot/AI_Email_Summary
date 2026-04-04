@@ -31,13 +31,15 @@ Tip: add screenshots to this README later to make friend installs even easier.
 
 ## Easiest Install
 1. Download or clone this folder.
-2. Double-click `START_HERE.bat`.
-3. If setup appears, let it finish.
-4. When prompted, get your OpenAI API key from:
-   `https://platform.openai.com/api-keys`
-5. Paste the key into `.env` so it looks like:
+2. Make sure Outlook desktop is already open and signed in.
+3. Double-click `START_HERE.bat`.
+4. If setup appears, let it finish.
+5. When Notepad opens `.env`, paste your key so it looks like:
    `OPENAI_API_KEY=sk-...`
-6. The app will launch in your browser.
+6. Save the file, close Notepad, and run `START_HERE.bat` again.
+7. Your browser should open the app at `http://localhost:5000`.
+
+If your friend only reads one section of this README, make it this one.
 
 ## How To Get An OpenAI API Key
 1. Sign in or create an account at:
@@ -59,6 +61,12 @@ Important:
 - Web app directly: double-click `run_summary.bat`
 - Console summary: double-click `ckemail.bat`
 
+## First 3 Minutes
+1. Click `Summarise Inbox`
+2. Review the AI summary and the scored email cards
+3. Drag any important email into `Watching`
+4. Click `Check Replies` to see which emails you already answered
+
 ## First-Time Setup Notes
 - `setup.bat` creates a local virtual environment in `venv`
 - `rules.json` stores your scoring rules
@@ -76,6 +84,7 @@ Important:
 ## Troubleshooting
 - If setup fails, make sure Python is installed and available in PATH
 - If Outlook cannot be found, open Outlook and make sure you are signed in
-- If summaries fail, confirm your `OPENAI_API_KEY` is valid
+- If summaries fail, confirm your `OPENAI_API_KEY` is valid and not still `sk-your-key-here`
 - If larger inbox summaries struggle, the app now falls back to a local summary so you still get results
 - If a package is missing, rerun `setup.bat`
+- If `START_HERE.bat` stops after opening `.env`, save your key and run it again
