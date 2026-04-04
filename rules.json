@@ -1,0 +1,72 @@
+{
+  "my_email": "",
+  "my_name": "",
+  "rules": [
+    {
+      "id": "to_only_me",
+      "name": "Sent only to me (sole recipient)",
+      "description": "I am the only person in To \u2014 no CC, no other recipients",
+      "enabled": true,
+      "score": 100,
+      "builtin": true,
+      "conditions": [
+        {
+          "type": "to_only_me"
+        }
+      ]
+    },
+    {
+      "id": "at_mention",
+      "name": "@mention of my name in body",
+      "description": "@MyName appears somewhere in the email body",
+      "enabled": true,
+      "score": 80,
+      "builtin": true,
+      "conditions": [
+        {
+          "type": "at_mention"
+        }
+      ]
+    },
+    {
+      "id": "to_me_direct",
+      "name": "My email is in the To field",
+      "description": "I am a direct To recipient (may have others)",
+      "enabled": true,
+      "score": 60,
+      "builtin": true,
+      "conditions": [
+        {
+          "type": "to_me"
+        }
+      ]
+    },
+    {
+      "id": "has_attachment",
+      "name": "Has attachments",
+      "description": "Email contains one or more attachments",
+      "enabled": true,
+      "score": 30,
+      "builtin": true,
+      "conditions": [
+        {
+          "type": "has_attachment"
+        }
+      ]
+    },
+    {
+      "id": "cc_only_me",
+      "name": "I am CC'd only (not in To)",
+      "description": "I'm in CC but not a primary To recipient",
+      "enabled": true,
+      "score": 15,
+      "builtin": true,
+      "conditions": [
+        {
+          "type": "cc_only_me"
+        }
+      ]
+    }
+  ],
+  "custom_rules": []
+}

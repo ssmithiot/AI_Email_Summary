@@ -1,0 +1,4 @@
+openai
+pywin32
+python-dotenv
+flask

@@ -1,0 +1,1217 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Outlook Inbox Summarizer</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+/* â”€â”€ Reset & base â”€â”€ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f0f2f5;color:#1a1a2e;font-size:14px}
+
+/* â”€â”€ App shell: header + two-col content â”€â”€ */
+.app{display:grid;grid-template-rows:52px 1fr;height:100vh}
+
+/* â”€â”€ Header bar â”€â”€ */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:#fff;border-bottom:1px solid #e2e8f0;z-index:10}
+.topbar-left{display:flex;align-items:center;gap:10px}
+.topbar h1{font-size:1.05rem;font-weight:700;display:flex;align-items:center;gap:7px}
+.topbar-sub{font-size:.75rem;color:#aaa;border-left:1px solid #e2e8f0;padding-left:10px}
+.icon-btn{background:#f7f7fb;border:1.5px solid #e2e8f0;border-radius:8px;padding:6px 14px;font-size:.8rem;font-weight:600;cursor:pointer;color:#555;transition:border-color .15s,color .15s;display:flex;align-items:center;gap:5px}
+.icon-btn:hover{border-color:#6c63ff;color:#6c63ff}
+
+/* â”€â”€ Two-column layout â”€â”€ */
+.content{display:grid;grid-template-columns:270px 1fr;overflow:hidden;height:100%}
+
+/* â”€â”€ Left panel â”€â”€ */
+.left{overflow-y:auto;padding:18px 16px;border-right:1px solid #e2e8f0;background:#fafbfc;display:flex;flex-direction:column;gap:12px}
+.panel-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#bbb;margin-bottom:6px}
+
+/* Mode cards â€” stacked vertically in sidebar */
+.mode-card{border:2px solid #e2e8f0;border-radius:10px;padding:11px 13px;cursor:pointer;background:#fff;transition:border-color .15s,box-shadow .15s;display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.mode-card:last-child{margin-bottom:0}
+.mode-card:hover{border-color:#6c63ff}
+.mode-card.active{border-color:#6c63ff;background:#f5f4ff;box-shadow:0 0 0 3px rgba(108,99,255,.08)}
+.mode-icon{font-size:1.2rem;flex-shrink:0}
+.mode-title{font-weight:600;font-size:.84rem}
+.mode-desc{font-size:.72rem;color:#aaa;margin-top:1px}
+
+/* Sub-options */
+.sub-options{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;display:none}
+.sub-options.visible{display:block}
+.sub-options label{font-size:.77rem;font-weight:600;color:#666;display:block;margin-bottom:8px}
+.date-pills{display:flex;gap:6px;flex-wrap:wrap}
+.pill{border:1.5px solid #e2e8f0;border-radius:16px;padding:4px 11px;font-size:.75rem;cursor:pointer;background:#fff;transition:all .15s}
+.pill:hover{border-color:#6c63ff}
+.pill.active{border-color:#6c63ff;background:#6c63ff;color:#fff}
+.custom-date-row{display:none;margin-top:9px;align-items:center;gap:8px}
+.custom-date-row.visible{display:flex}
+.custom-date-row input{border:1.5px solid #e2e8f0;border-radius:7px;padding:5px 8px;font-size:.78rem;outline:none;width:100%}
+.custom-date-row input:focus{border-color:#6c63ff}
+.qty-row{display:flex;align-items:center;gap:10px}
+.qty-row input[type=range]{flex:1;accent-color:#6c63ff}
+.qty-label{font-weight:700;color:#6c63ff;min-width:24px;font-size:.9rem;text-align:right}
+
+/* Buttons in sidebar */
+.btn{width:100%;padding:11px;background:#6c63ff;color:#fff;border:none;border-radius:10px;font-size:.88rem;font-weight:600;cursor:pointer;transition:background .15s;text-align:center}
+.btn:hover{background:#5a52e0}
+.btn:disabled{background:#bbb;cursor:not-allowed}
+.btn-sm{width:100%;padding:8px;background:#fff;color:#555;border:1.5px solid #e2e8f0;border-radius:9px;font-size:.78rem;font-weight:600;cursor:pointer;transition:all .15s;text-align:center}
+.btn-sm:hover{border-color:#6c63ff;color:#6c63ff}
+.btn-sm:disabled{opacity:.45;cursor:not-allowed}
+.btn-sm.danger:hover{border-color:#e53e3e;color:#e53e3e}
+.btn-group{display:flex;flex-direction:column;gap:6px}
+.auto-refresh-box{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.auto-refresh-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.auto-refresh-label{font-size:.77rem;font-weight:700;color:#666}
+.auto-refresh-toggle{display:flex;align-items:center;gap:8px;font-size:.76rem;color:#666}
+.auto-refresh-toggle input{accent-color:#6c63ff}
+.auto-refresh-row{display:flex;align-items:center;gap:8px}
+.auto-refresh-row select{flex:1;border:1.5px solid #e2e8f0;border-radius:7px;padding:5px 8px;font-size:.78rem;outline:none;background:#fff}
+.auto-refresh-row select:focus{border-color:#6c63ff}
+.auto-refresh-status{font-size:.72rem;color:#9f7aea}
+
+/* â”€â”€ Right panel â€” two sub-columns â”€â”€ */
+.right{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:18px 20px;overflow:hidden;min-height:0}
+.right-col{overflow-y:auto;display:flex;flex-direction:column;gap:14px;min-height:0;padding-right:4px}
+
+/* Summary panel */
+.summary-panel{background:#fff;border-radius:12px;padding:20px 24px;border:1px solid #e2e8f0;display:none;flex-shrink:0}
+.summary-panel.visible{display:block}
+
+/* â”€â”€ Quick Stats panel â”€â”€ */
+.stats-panel{background:#fff;border-radius:12px;padding:14px 18px;border:1px solid #e2e8f0;display:none;flex-shrink:0}
+.stats-panel.visible{display:block}
+.stats-title{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#bbb;margin-bottom:10px}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+.stat-box{background:#f9f9fb;border-radius:8px;padding:8px 6px;text-align:center;border:1px solid #f0f0f8}
+.stat-num{font-size:1.3rem;font-weight:700;color:#6c63ff;line-height:1}
+.stat-lbl{font-size:.63rem;color:#aaa;margin-top:3px;text-transform:uppercase;letter-spacing:.04em}
+.stat-box.urgent .stat-num{color:#c53030}
+.stat-box.unread .stat-num{color:#2b6cb0}
+.stat-box.attach .stat-num{color:#276749}
+.stats-top-senders{margin-top:2px}
+.stats-sub-title{font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#ccc;margin-bottom:5px}
+.sender-row{display:flex;align-items:center;justify-content:space-between;padding:3px 0;border-bottom:1px solid #f5f5f5;font-size:.76rem}
+.sender-row:last-child{border-bottom:none}
+.sender-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%;color:#444}
+.sender-count{font-size:.7rem;font-weight:700;color:#9f7aea;background:#f5f4ff;border-radius:10px;padding:1px 7px;flex-shrink:0}
+.replies-panel{background:#fff;border-radius:12px;padding:14px 18px;border:1px solid #e2e8f0;display:none;flex-shrink:0}
+.replies-panel.visible{display:block}
+.replies-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.replies-label{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#bbb}
+.replies-count{font-size:.72rem;color:#9f7aea;font-weight:700}
+.reply-result{padding:9px 0;border-bottom:1px solid #f5f5f5}
+.reply-result:last-child{border-bottom:none;padding-bottom:0}
+.reply-result.dragging{opacity:.45}
+.reply-result-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.reply-drag{color:#bbb;font-size:.82rem;cursor:grab;user-select:none;flex-shrink:0;padding-top:2px}
+.reply-drag:active{cursor:grabbing}
+.reply-result-main{flex:1;min-width:0}
+.reply-result-subject{font-size:.8rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.reply-result-meta{font-size:.71rem;color:#8b90a7;margin-top:2px}
+.reply-result-note{font-size:.71rem;color:#b0b3c3;margin-top:3px}
+.reply-empty{font-size:.76rem;color:#aaa}
+.summary-title{font-size:.82rem;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
+.status-msg{color:#aaa;font-size:.84rem;display:flex;align-items:center;gap:8px}
+.spinner{width:14px;height:14px;border:2px solid #ddd;border-top-color:#6c63ff;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.error-msg{color:#e53e3e;font-size:.84rem}
+#output{line-height:1.75;font-size:.9rem}
+#output h1,#output h2{font-size:.98rem;font-weight:700;margin:14px 0 6px;padding-bottom:4px;border-bottom:1px solid #f0f2f5}
+#output h3{font-size:.9rem;font-weight:600;margin:10px 0 4px}
+#output p{margin-bottom:6px}
+#output ul,#output ol{padding-left:16px;margin-bottom:8px}
+#output li{margin-bottom:3px}
+#output table{border-collapse:collapse;width:100%;margin-bottom:8px;font-size:.82rem}
+#output th{background:#f7f7fb;padding:5px 10px;text-align:left;border:1px solid #e2e8f0}
+#output td{padding:5px 10px;border:1px solid #e2e8f0}
+.meta{font-size:.72rem;color:#ccc;text-align:right;margin-top:10px;padding-top:8px;border-top:1px solid #f5f5f5}
+
+/* â”€â”€ Keepers tray (right-right column, top) â”€â”€ */
+.keepers-panel{background:#fff;border:2px dashed #d6d3f5;border-radius:12px;padding:14px 18px;display:none;transition:border-color .2s,background .2s}
+.keepers-panel.visible{display:block}
+.keepers-panel.drop-active{border-color:#6c63ff;background:#f9f8ff}
+.keepers-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.keepers-label{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9f7aea}
+.keepers-clear{font-size:.72rem;color:#ccc;background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:4px}
+.keepers-clear:hover{color:#e53e3e}
+.keepers-empty{color:#d6d3f5;font-size:.82rem;text-align:center;padding:10px 0;pointer-events:none}
+.watch-thread{background:#f9f8ff;border:1px solid #e9d8fd;border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.watch-thread:last-child{margin-bottom:0}
+.thread-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.thread-main{flex:1;min-width:0}
+.thread-toggle{display:flex;align-items:center;gap:8px;cursor:pointer}
+.thread-chevron{font-size:.72rem;color:#9f7aea;transition:transform .15s}
+.thread-chevron.collapsed{transform:rotate(-90deg)}
+.thread-title{font-size:.82rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.thread-meta{font-size:.71rem;color:#8b90a7;margin-top:2px}
+.thread-count{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#efeaff;color:#6c63ff;font-size:.65rem;font-weight:700}
+.thread-actions{display:flex;gap:5px;flex-shrink:0}
+.thread-messages{margin-top:10px;padding-top:10px;border-top:1px solid #e7def8}
+.thread-messages.collapsed{display:none}
+.thread-message{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid #efeaff}
+.thread-message:last-child{border-bottom:none;padding-bottom:0}
+.thread-message-main{flex:1;min-width:0;cursor:pointer}
+.thread-message-subject{font-size:.78rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.thread-message-meta{font-size:.69rem;color:#8b90a7;margin-top:2px}
+.thread-badges{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+
+/* â”€â”€ Email cards (right panel, below keepers) â”€â”€ */
+.cards-panel{display:none;flex-shrink:0}
+.cards-panel.visible{display:block}
+.cards-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.cards-label{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#bbb}
+.cards-hint{font-size:.7rem;color:#ccc}
+.email-card{background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px 13px;margin-bottom:6px;display:flex;align-items:center;gap:9px;cursor:grab;transition:border-color .15s,box-shadow .15s}
+.email-card:last-child{margin-bottom:0}
+.email-card:active{cursor:grabbing}
+.email-card.dragging{opacity:.4;border-color:#6c63ff}
+.email-card.is-read{opacity:.5}
+.unread-dot{width:7px;height:7px;border-radius:50%;background:#6c63ff;flex-shrink:0}
+.email-card.is-read .unread-dot{background:transparent}
+.badge{font-size:.63rem;font-weight:700;border-radius:4px;padding:1px 5px;flex-shrink:0;white-space:nowrap}
+.badge-urgent{color:#c53030;background:#fff5f5;border:1px solid #fed7d7}
+.badge-attach{color:#2b6cb0;background:#ebf8ff;border:1px solid #bee3f8}
+.badge-score{color:#6c63ff;background:#f5f4ff;border:1px solid #e9d8fd;font-size:.61rem}
+.email-card-body{flex:1;min-width:0}
+.email-card-body.openable{cursor:pointer}
+.email-card-subject{font-size:.83rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.email-card-meta{font-size:.72rem;color:#bbb;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.matched-rules-tip{font-size:.68rem;color:#9f7aea;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.open-hint{font-size:.66rem;color:#b0b3c3;margin-top:3px}
+.summary-ref{display:inline-flex;align-items:center;gap:5px;margin-left:4px;padding:1px 8px;border:1px solid #d6d3f5;border-radius:999px;background:#f7f5ff;color:#5a52e0;font-size:.72rem;font-weight:600;cursor:pointer}
+.summary-ref:hover{border-color:#6c63ff;color:#6c63ff}
+.replied-badge{display:none;font-size:.67rem;color:#276749;background:#f0fff4;border:1px solid #9ae6b4;border-radius:4px;padding:1px 5px;flex-shrink:0}
+.replied-badge.visible{display:inline}
+.card-actions{display:flex;gap:5px;flex-shrink:0}
+.card-btn{padding:4px 8px;border-radius:5px;font-size:.71rem;font-weight:600;cursor:pointer;border:1.5px solid #e2e8f0;background:#fff;transition:all .15s;white-space:nowrap}
+.card-btn:hover{border-color:#6c63ff;color:#6c63ff}
+.card-btn.flagged{border-color:#ed8936;color:#ed8936;background:#fffaf0}
+.card-btn.done{border-color:#e2e8f0;color:#ccc;cursor:default}
+
+/* â”€â”€ Rules modal â”€â”€ */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:none;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto}
+.modal-overlay.open{display:flex}
+.modal{background:#fff;border-radius:14px;width:100%;max-width:660px;padding:26px;position:relative}
+.modal-title{font-size:1rem;font-weight:700;margin-bottom:3px}
+.modal-sub{font-size:.78rem;color:#aaa;margin-bottom:18px}
+.modal-close{position:absolute;top:14px;right:16px;background:none;border:none;font-size:1.2rem;cursor:pointer;color:#bbb}
+.modal-close:hover{color:#333}
+.modal-section{margin-bottom:20px}
+.modal-section-title{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#bbb;margin-bottom:10px}
+.identity-row{display:flex;gap:10px;flex-wrap:wrap}
+.identity-field{display:flex;flex-direction:column;gap:4px;flex:1;min-width:160px}
+.identity-field label{font-size:.76rem;font-weight:600;color:#666}
+.identity-field input{border:1.5px solid #e2e8f0;border-radius:8px;padding:7px 10px;font-size:.82rem;outline:none}
+.identity-field input:focus{border-color:#6c63ff}
+.rule-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f5f5f5}
+.rule-row:last-child{border-bottom:none}
+.rule-toggle{width:34px;height:18px;border-radius:9px;background:#dde1e7;position:relative;cursor:pointer;flex-shrink:0;transition:background .2s;border:none}
+.rule-toggle.on{background:#6c63ff}
+.rule-toggle::after{content:'';position:absolute;width:12px;height:12px;background:#fff;border-radius:50%;top:3px;left:3px;transition:transform .2s}
+.rule-toggle.on::after{transform:translateX(16px)}
+.rule-info{flex:1;min-width:0}
+.rule-name{font-size:.83rem;font-weight:600}
+.rule-desc{font-size:.72rem;color:#bbb;margin-top:1px}
+.rule-score-wrap{display:flex;align-items:center;gap:5px;flex-shrink:0}
+.rule-score-wrap label{font-size:.72rem;color:#aaa}
+.rule-score-input{width:50px;border:1.5px solid #e2e8f0;border-radius:6px;padding:3px 6px;font-size:.8rem;text-align:center;outline:none}
+.rule-score-input:focus{border-color:#6c63ff}
+.rule-delete{background:none;border:none;color:#ddd;cursor:pointer;font-size:.95rem;flex-shrink:0}
+.rule-delete:hover{color:#e53e3e}
+.add-rule-form{background:#f9f9fb;border:1px solid #eee;border-radius:10px;padding:12px;margin-top:8px}
+.add-rule-form .form-row{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:7px}
+.add-rule-form input,.add-rule-form select{border:1.5px solid #e2e8f0;border-radius:7px;padding:5px 9px;font-size:.79rem;outline:none;background:#fff}
+.add-rule-form input:focus,.add-rule-form select:focus{border-color:#6c63ff}
+.add-rule-form .r-name{flex:2;min-width:130px}
+.add-rule-form .r-cond{flex:2;min-width:150px}
+.add-rule-form .r-val{flex:2;min-width:110px;display:none}
+.add-rule-form .r-score{width:65px}
+.modal-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid #f0f2f5}
+.modal-footer .btn{flex:none;padding:9px 24px;width:auto}
+
+/* â”€â”€ Toast â”€â”€ */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1a1a2e;color:#fff;padding:8px 18px;border-radius:8px;font-size:.8rem;opacity:0;transition:opacity .3s;pointer-events:none;z-index:999;white-space:nowrap}
+.toast.show{opacity:1}
+
+/* Scrollbar styling */
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#ddd;border-radius:10px}
+::-webkit-scrollbar-thumb:hover{background:#bbb}
+
+body.dark-mode{background:#131720;color:#eef2ff}
+body.dark-mode .topbar{background:#181d29;border-bottom-color:#2a3245}
+body.dark-mode .topbar-sub{color:#8f9ab3;border-left-color:#2a3245}
+body.dark-mode .icon-btn,
+body.dark-mode .btn-sm,
+body.dark-mode .card-btn,
+body.dark-mode .rule-score-input,
+body.dark-mode .identity-field input,
+body.dark-mode .add-rule-form input,
+body.dark-mode .add-rule-form select,
+body.dark-mode .custom-date-row input,
+body.dark-mode .auto-refresh-row select{background:#151b27;color:#eef2ff;border-color:#364158}
+body.dark-mode .content,
+body.dark-mode .left{background:#111622}
+body.dark-mode .left{border-right-color:#2a3245}
+body.dark-mode .panel-label,
+body.dark-mode .stats-title,
+body.dark-mode .cards-label,
+body.dark-mode .summary-title,
+body.dark-mode .modal-section-title,
+body.dark-mode .stat-lbl,
+body.dark-mode .stats-sub-title{color:#8f9ab3}
+body.dark-mode .mode-card,
+body.dark-mode .sub-options,
+body.dark-mode .auto-refresh-box,
+body.dark-mode .summary-panel,
+body.dark-mode .stats-panel,
+body.dark-mode .replies-panel,
+body.dark-mode .watch-thread,
+body.dark-mode .email-card,
+body.dark-mode .modal,
+body.dark-mode .add-rule-form{background:#181d29;border-color:#2a3245;color:#eef2ff}
+body.dark-mode .mode-card.active{background:#23283a;box-shadow:0 0 0 3px rgba(108,99,255,.18)}
+body.dark-mode .stat-box{background:#151b27;border-color:#252d40}
+body.dark-mode .sender-row,
+body.dark-mode .rule-row{border-bottom-color:#252d40}
+body.dark-mode .sender-name,
+body.dark-mode .rule-name,
+body.dark-mode .rule-desc,
+body.dark-mode .email-card-subject,
+body.dark-mode .keeper-subject,
+body.dark-mode #output,
+body.dark-mode #output p,
+body.dark-mode #output li,
+body.dark-mode #output td,
+body.dark-mode #output th{color:#eef2ff}
+body.dark-mode .email-card-meta,
+body.dark-mode .keeper-meta,
+body.dark-mode .cards-hint,
+body.dark-mode .meta,
+body.dark-mode .status-msg,
+body.dark-mode .mode-desc,
+body.dark-mode .keepers-clear,
+body.dark-mode .open-hint,
+body.dark-mode .auto-refresh-label,
+body.dark-mode .auto-refresh-toggle,
+body.dark-mode .auto-refresh-status{color:#8f9ab3}
+body.dark-mode .summary-ref{background:#23283a;border-color:#51607e;color:#c6b7ff}
+body.dark-mode .keepers-panel{background:#181d29;border-color:#51607e}
+body.dark-mode .keepers-panel.drop-active{background:#23283a}
+body.dark-mode .keepers-empty{color:#7281a0}
+body.dark-mode .thread-meta,
+body.dark-mode .thread-message-meta,
+body.dark-mode .reply-result-meta,
+body.dark-mode .reply-result-note,
+body.dark-mode .reply-empty{color:#8f9ab3}
+body.dark-mode .thread-messages{border-top-color:#2a3245}
+body.dark-mode .thread-message{border-bottom-color:#2a3245}
+body.dark-mode .thread-count{background:#23283a;color:#c6b7ff}
+body.dark-mode .matched-rules-tip,
+body.dark-mode .keepers-label,
+body.dark-mode .sender-count{color:#c6b7ff}
+body.dark-mode #output h1,
+body.dark-mode #output h2{border-bottom-color:#2a3245}
+body.dark-mode #output th{background:#151b27;border-color:#2a3245}
+body.dark-mode #output td{border-color:#2a3245}
+body.dark-mode .modal-overlay{background:rgba(0,0,0,.65)}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- â”€â”€ Top bar â”€â”€ -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <h1>Outlook Inbox Summarizer</h1>
+      <span class="topbar-sub">Emails scored &amp; sorted by your rules before Claude summarises</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px"><button class="icon-btn" id="theme-btn" onclick="toggleTheme()">Dark Mode</button><button class="icon-btn" onclick="openRules()">Rules</button></div>
+  </div>
+
+  <!-- â”€â”€ Two-column content â”€â”€ -->
+  <div class="content">
+
+    <!-- â•”â•â• LEFT PANEL â•â•â•— -->
+    <div class="left">
+
+      <div>
+        <div class="panel-label">Select mode</div>
+        <div class="mode-card active" onclick="selectMode('quantity',this)">
+          <div class="mode-icon">Q</div>
+          <div><div class="mode-title">Most Recent</div><div class="mode-desc">A set number of latest emails</div></div>
+        </div>
+        <div class="mode-card" onclick="selectMode('unread',this)">
+          <div class="mode-icon">U</div>
+          <div><div class="mode-title">Unread Only</div><div class="mode-desc">Emails you haven't read yet</div></div>
+        </div>
+        <div class="mode-card" onclick="selectMode('date',this)">
+          <div class="mode-icon">D</div>
+          <div><div class="mode-title">By Date</div><div class="mode-desc">Today, last 7/30 days, or custom</div></div>
+        </div>
+      </div>
+
+      <!-- Date sub-options -->
+      <div id="date-options" class="sub-options">
+        <label>Date range</label>
+        <div class="date-pills">
+          <div class="pill active" onclick="selectRange('today',this)">Today</div>
+          <div class="pill" onclick="selectRange('7days',this)">7 days</div>
+          <div class="pill" onclick="selectRange('30days',this)">30 days</div>
+          <div class="pill" onclick="selectRange('custom',this)">Custom...</div>
+        </div>
+        <div id="custom-date-row" class="custom-date-row">
+          <input type="date" id="custom-date">
+        </div>
+      </div>
+
+      <!-- Quantity sub-options -->
+      <div id="qty-options" class="sub-options visible">
+        <label>How many recent emails?</label>
+        <div class="qty-row">
+          <input type="range" id="qty-slider" min="5" max="100" value="30" step="5"
+                 oninput="document.getElementById('qty-label').textContent=this.value">
+          <span class="qty-label" id="qty-label">30</span>
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="btn-group">
+        <button class="btn" id="run-btn" onclick="runSummary()">Summarise Inbox</button>
+        <button class="btn-sm" id="reply-btn" onclick="checkReplies()" style="display:none">Check Replies</button>
+        <button class="btn-sm danger" id="mark-btn" onclick="markAllRead()">Mark All Read</button>
+      </div>
+
+      <div class="auto-refresh-box">
+        <div class="auto-refresh-top">
+          <span class="auto-refresh-label">Auto Update Inbox</span>
+          <label class="auto-refresh-toggle">
+            <input type="checkbox" id="auto-refresh-enabled" onchange="toggleAutoRefresh()">
+            <span>Unread only</span>
+          </label>
+        </div>
+        <div class="auto-refresh-row">
+          <select id="auto-refresh-minutes" onchange="changeAutoRefreshInterval()">
+            <option value="5" selected>Every 5 min</option>
+            <option value="10">Every 10 min</option>
+            <option value="15">Every 15 min</option>
+            <option value="30">Every 30 min</option>
+          </select>
+        </div>
+        <div class="auto-refresh-status" id="auto-refresh-status">Auto update is off</div>
+      </div>
+
+    </div><!-- /left -->
+
+    <!-- â•”â•â• RIGHT PANEL â€” two sub-columns â•â•â•— -->
+    <div class="right" id="right-panel">
+
+      <!-- â”€â”€ Left sub-column: Summary + Quick Stats â”€â”€ -->
+      <div class="right-col" id="right-left">
+
+        <!-- Summary -->
+        <div class="summary-panel" id="summary-panel">
+          <div class="summary-title">
+            <span id="summary-title-text">Inbox Summary</span>
+            <span class="meta" id="meta" style="margin:0;padding:0;border:none"></span>
+          </div>
+          <div id="status" class="status-msg" style="display:none">
+            <div class="spinner"></div><span id="status-text"></span>
+          </div>
+          <div id="error" class="error-msg" style="display:none"></div>
+          <div id="output"></div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="stats-panel" id="stats-panel">
+          <div class="stats-title">Quick Stats</div>
+          <div class="stats-grid">
+            <div class="stat-box">
+              <div class="stat-num" id="stat-total">-</div>
+              <div class="stat-lbl">Total</div>
+            </div>
+            <div class="stat-box unread">
+              <div class="stat-num" id="stat-unread">-</div>
+              <div class="stat-lbl">Unread</div>
+            </div>
+            <div class="stat-box urgent">
+              <div class="stat-num" id="stat-urgent">-</div>
+              <div class="stat-lbl">Urgent</div>
+            </div>
+            <div class="stat-box attach">
+              <div class="stat-num" id="stat-attach">-</div>
+              <div class="stat-lbl">Attachments</div>
+            </div>
+          </div>
+          <div class="stats-top-senders">
+            <div class="stats-sub-title">Top Senders</div>
+            <div id="stats-senders"></div>
+          </div>
+        </div>
+
+        <div class="replies-panel" id="replies-panel">
+          <div class="replies-header">
+            <span class="replies-label">Replies Found</span>
+            <span class="replies-count" id="replies-count">0</span>
+          </div>
+          <div id="replies-list" class="reply-empty">Run Check Replies to see matched sent responses here.</div>
+        </div>
+
+      </div><!-- /right-left -->
+
+      <!-- â”€â”€ Right sub-column: Keepers + Email Cards â”€â”€ -->
+      <div class="right-col" id="right-right">
+
+        <!-- Keepers tray -->
+        <div class="keepers-panel" id="keepers-panel">
+          <div class="keepers-header">
+            <span class="keepers-label">Watching</span>
+            <button class="keepers-clear" onclick="clearKeepers()">Clear all</button>
+          </div>
+          <div id="keepers-list">
+            <div class="keepers-empty" id="keepers-empty">Drag an email here to watch the whole conversation thread. New matching replies will join it automatically.</div>
+          </div>
+        </div>
+
+        <!-- Email cards -->
+        <div class="cards-panel" id="cards-panel">
+          <div class="cards-header">
+            <span class="cards-label">Emails in this summary</span>
+            <span class="cards-hint">Drag to Watching</span>
+          </div>
+          <div id="cards-list"></div>
+        </div>
+
+      </div><!-- /right-right -->
+
+    </div><!-- /right -->
+  </div><!-- /content -->
+</div><!-- /app -->
+
+<div class="toast" id="toast"></div>
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• RULES MODAL â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<div class="modal-overlay" id="rules-modal">
+<div class="modal">
+  <button class="modal-close" onclick="closeRules()">X</button>
+  <div class="modal-title">Priority Rules</div>
+  <div class="modal-sub">Each matched rule adds its score to the email's priority. Emails are sorted highest-score first.</div>
+
+  <div class="modal-section">
+    <div class="modal-section-title">Your Identity</div>
+    <div class="identity-row">
+      <div class="identity-field">
+        <label>Your email address</label>
+        <input type="email" id="r-my-email" placeholder="you@company.com">
+      </div>
+      <div class="identity-field">
+        <label>Your display name</label>
+        <input type="text" id="r-my-name" placeholder="Used for @mention detection">
+      </div>
+    </div>
+    <button class="btn-sm" style="margin-top:9px;width:auto;padding:6px 14px" onclick="autoDetectIdentity()">Auto-detect from Outlook</button>
+  </div>
+
+  <div class="modal-section">
+    <div class="modal-section-title">Built-in Rules</div>
+    <div id="builtin-rules-list"></div>
+  </div>
+
+  <div class="modal-section">
+    <div class="modal-section-title">Custom Rules</div>
+    <div id="custom-rules-list"></div>
+    <div class="add-rule-form">
+      <div style="font-size:.76rem;font-weight:600;color:#666;margin-bottom:8px">Add a rule</div>
+      <div class="form-row">
+        <input class="r-name" id="add-name" placeholder="Rule name" type="text">
+        <input class="r-score" id="add-score" placeholder="Score" type="number" value="50" min="1" max="999">
+      </div>
+      <div class="form-row">
+        <select class="r-cond" id="add-cond" onchange="condTypeChanged()">
+          <option value="">-- Select condition --</option>
+          <option value="from_address">From address contains</option>
+          <option value="from_domain">From domain equals</option>
+          <option value="subject_contains">Subject contains</option>
+          <option value="body_contains">Body contains</option>
+          <option value="to_only_me">Sent only to me</option>
+          <option value="to_me">My email is in To</option>
+          <option value="cc_only_me">I am CC'd but not in To</option>
+          <option value="at_mention">@mention of my name in body</option>
+          <option value="has_attachment">Has attachments</option>
+        </select>
+        <input class="r-val" id="add-val" placeholder="Value" type="text">
+      </div>
+      <button class="btn-sm" style="width:auto;padding:6px 14px" onclick="addCustomRule()">+ Add Rule</button>
+    </div>
+  </div>
+
+  <div class="modal-footer">
+    <button class="btn-sm" style="width:auto;padding:8px 18px" onclick="closeRules()">Cancel</button>
+    <button class="btn" onclick="saveRules()">Save Rules</button>
+  </div>
+</div>
+</div>
+
+<script>
+// â”€â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+let currentMode  = 'quantity';
+let currentRange = 'today';
+let rawText      = '';
+let startTime    = null;
+let rulesConfig  = null;
+let emailData    = [];
+let keepers      = [];
+let summaryEmailMap = new Map();
+let collapsedThreads = new Set();
+let replyResults = [];
+let darkMode     = false;
+let autoRefreshEnabled = false;
+let autoRefreshMinutes = 5;
+let autoRefreshTimer = null;
+let isSummaryRunning = false;
+
+function applyTheme() {
+  document.body.classList.toggle('dark-mode', darkMode);
+  document.getElementById('theme-btn').textContent = darkMode ? 'Light Mode' : 'Dark Mode';
+}
+
+function toggleTheme() {
+  darkMode = !darkMode;
+  localStorage.setItem('email-summary-dark-mode', darkMode ? '1' : '0');
+  applyTheme();
+}
+
+function initTheme() {
+  darkMode = localStorage.getItem('email-summary-dark-mode') === '1';
+  applyTheme();
+}
+
+function updateAutoRefreshStatus() {
+  const status = document.getElementById('auto-refresh-status');
+  if (!autoRefreshEnabled) {
+    status.textContent = 'Auto update is off';
+    return;
+  }
+  status.textContent = `Watching unread inbox every ${autoRefreshMinutes} minute${autoRefreshMinutes !== 1 ? 's' : ''}`;
+}
+
+function scheduleAutoRefresh() {
+  if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+  if (!autoRefreshEnabled) {
+    autoRefreshTimer = null;
+    updateAutoRefreshStatus();
+    return;
+  }
+  autoRefreshTimer = setInterval(() => {
+    const runBtn = document.getElementById('run-btn');
+    if (runBtn.disabled) return;
+    runSummary({modeOverride:'unread', triggeredByAuto:true});
+  }, autoRefreshMinutes * 60 * 1000);
+  updateAutoRefreshStatus();
+}
+
+function toggleAutoRefresh() {
+  autoRefreshEnabled = document.getElementById('auto-refresh-enabled').checked;
+  localStorage.setItem('email-summary-auto-enabled', autoRefreshEnabled ? '1' : '0');
+  scheduleAutoRefresh();
+}
+
+function changeAutoRefreshInterval() {
+  autoRefreshMinutes = Math.max(5, Number(document.getElementById('auto-refresh-minutes').value || 5));
+  document.getElementById('auto-refresh-minutes').value = String(autoRefreshMinutes);
+  localStorage.setItem('email-summary-auto-minutes', String(autoRefreshMinutes));
+  scheduleAutoRefresh();
+}
+
+function initAutoRefresh() {
+  autoRefreshEnabled = localStorage.getItem('email-summary-auto-enabled') === '1';
+  autoRefreshMinutes = Math.max(5, Number(localStorage.getItem('email-summary-auto-minutes') || '5'));
+  document.getElementById('auto-refresh-enabled').checked = autoRefreshEnabled;
+  document.getElementById('auto-refresh-minutes').value = String(autoRefreshMinutes);
+  scheduleAutoRefresh();
+}
+
+// â”€â”€â”€ Mode / range â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function selectMode(mode, el) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('date-options').classList.toggle('visible', mode === 'date');
+  document.getElementById('qty-options').classList.toggle('visible',  mode === 'quantity');
+}
+function selectRange(range, el) {
+  currentRange = range;
+  document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('custom-date-row').classList.toggle('visible', range === 'custom');
+}
+function buildUrl(modeOverride) {
+  const activeMode = modeOverride || currentMode;
+  const p = new URLSearchParams({mode: activeMode});
+  if (activeMode === 'date') {
+    p.set('range', currentRange);
+    if (currentRange === 'custom') p.set('custom_date', document.getElementById('custom-date').value);
+  }
+  if (activeMode === 'quantity') p.set('count', document.getElementById('qty-slider').value);
+  return '/summarize?' + p;
+}
+
+function buildSummaryEmailMap(emails) {
+  summaryEmailMap = new Map();
+  emails.forEach(email => {
+    if (typeof email.index === 'number') summaryEmailMap.set(email.index, email);
+  });
+}
+
+async function fetchWatching() {
+  const previousIds = new Set(keepers.map(thread => thread.thread_id));
+  const res = await fetch('/watching');
+  const data = await res.json();
+  keepers = data.ok ? (data.threads || data.items || []) : [];
+  keepers.forEach(thread => {
+    if (!previousIds.has(thread.thread_id)) collapsedThreads.add(thread.thread_id);
+  });
+}
+
+async function saveWatchingItem(item) {
+  const res = await fetch('/watching', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(item)
+  });
+  const data = await res.json();
+  if (data.ok) keepers = data.threads || data.items || [];
+  return data;
+}
+
+async function deleteWatchingItem(threadId) {
+  const res = await fetch('/watching/thread/' + encodeURIComponent(threadId), {method:'DELETE'});
+  const data = await res.json();
+  if (data.ok) keepers = data.threads || data.items || [];
+  return data;
+}
+
+async function clearWatchingItems() {
+  const res = await fetch('/watching/clear', {method:'POST'});
+  const data = await res.json();
+  if (data.ok) keepers = [];
+  return data;
+}
+
+function renderSummaryCitation(match, numText) {
+  const index = Number(numText);
+  const email = summaryEmailMap.get(index);
+  if (!email) return match;
+  return `<button class="summary-ref" onclick="openEmail('${esc(email.entry_id)}')">Email ${index}</button>`;
+}
+
+function renderSummary() {
+  const output = document.getElementById('output');
+  const html = marked.parse(rawText).replace(/\[Email (\d+)\]/g, renderSummaryCitation);
+  output.innerHTML = html;
+}
+
+function findWatchableItemByEntryId(entryId) {
+  const inboxEmail = emailData.find(email => email.entry_id === entryId);
+  if (inboxEmail) return inboxEmail;
+
+  const reply = replyResults.find(item => item.reply_entry_id === entryId);
+  if (!reply) return null;
+  return {
+    entry_id: reply.reply_entry_id,
+    from: reply.reply_to || 'Sent Reply',
+    from_email: '',
+    subject: reply.reply_subject || reply.original_subject || '(No Subject)',
+    normalized_subject: '',
+    received: reply.sent_on || '',
+    received_sort: reply.sent_on || '',
+    unread: false,
+    urgent: false,
+    has_attachment: false,
+    conversation_id: '',
+    internet_message_id: '',
+    in_reply_to: '',
+    references: []
+  };
+}
+
+function renderReplyResults() {
+  const panel = document.getElementById('replies-panel');
+  const countEl = document.getElementById('replies-count');
+  const list = document.getElementById('replies-list');
+  countEl.textContent = `${replyResults.length}`;
+  panel.classList.toggle('visible', replyResults.length > 0);
+  if (!replyResults.length) {
+    list.className = 'reply-empty';
+    list.textContent = 'Run Check Replies to see matched sent responses here.';
+    return;
+  }
+
+  list.className = '';
+  list.innerHTML = replyResults.map(item => `
+    <div class="reply-result" data-entry-id="${esc(item.reply_entry_id || item.original_entry_id)}">
+      <div class="reply-result-top">
+        <span class="reply-drag" draggable="true" title="Drag to Watching">::</span>
+        <div class="reply-result-main">
+          <div class="reply-result-subject">${esc(item.original_subject || item.reply_subject || '(No Subject)')}</div>
+          <div class="reply-result-meta">Reply sent ${esc(item.sent_on)}${item.reply_to ? ` to ${esc(item.reply_to)}` : ''}</div>
+          <div class="reply-result-note">Matched sent email: ${esc(item.reply_subject || '(No Subject)')}</div>
+        </div>
+        <button class="card-btn" onclick="openEmail('${esc(item.reply_entry_id || item.original_entry_id)}')">Open</button>
+      </div>
+    </div>`).join('');
+
+  list.querySelectorAll('.reply-drag').forEach(handle => {
+    handle.addEventListener('dragstart', e => {
+      const card = handle.closest('.reply-result');
+      const entryId = card?.dataset.entryId;
+      if (!entryId) return;
+      e.dataTransfer.setData('text/plain', entryId);
+      e.dataTransfer.effectAllowed = 'copy';
+      setTimeout(() => card.classList.add('dragging'), 0);
+    });
+    handle.addEventListener('dragend', () => {
+      const card = handle.closest('.reply-result');
+      if (card) card.classList.remove('dragging');
+    });
+  });
+}
+
+// â”€â”€â”€ Run summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function runSummary(options = {}) {
+  if (isSummaryRunning) return;
+  isSummaryRunning = true;
+  const modeOverride = options.modeOverride || null;
+  const triggeredByAuto = !!options.triggeredByAuto;
+  rawText = ''; startTime = Date.now(); emailData = []; summaryEmailMap = new Map(); replyResults = [];
+  const btn       = document.getElementById('run-btn');
+  const panel     = document.getElementById('summary-panel');
+  const status    = document.getElementById('status');
+  const statusTxt = document.getElementById('status-text');
+  const errEl     = document.getElementById('error');
+  const output    = document.getElementById('output');
+  const meta      = document.getElementById('meta');
+  const cardsP    = document.getElementById('cards-panel');
+  const cardsList = document.getElementById('cards-list');
+  const replyBtn  = document.getElementById('reply-btn');
+  const keepersP  = document.getElementById('keepers-panel');
+
+  const statsP = document.getElementById('stats-panel');
+
+  btn.disabled = true; btn.textContent = '...';
+  panel.classList.add('visible');
+  status.style.display = 'flex'; errEl.style.display = 'none';
+  output.innerHTML = ''; meta.textContent = '';
+  cardsP.classList.remove('visible'); cardsList.innerHTML = '';
+  replyBtn.style.display = 'none';
+  statsP.classList.remove('visible');
+  renderReplyResults();
+  renderKeepers();
+
+  if (triggeredByAuto) {
+    statusTxt.textContent = `Auto update: checking unread inbox every ${autoRefreshMinutes} minute${autoRefreshMinutes !== 1 ? 's' : ''}...`;
+  }
+
+  const es = new EventSource(buildUrl(modeOverride));
+  es.onmessage = ev => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === 'status') {
+      statusTxt.textContent = msg.text;
+    } else if (msg.type === 'text') {
+      status.style.display = 'none';
+      rawText += msg.text;
+      renderSummary();
+    } else if (msg.type === 'emails') {
+      emailData = msg.emails;
+      buildSummaryEmailMap(emailData);
+      renderSummary();
+      renderCards(emailData, cardsList);
+      renderStats(emailData);
+      fetchWatching().then(renderKeepers);
+      cardsP.classList.add('visible');
+      keepersP.classList.add('visible');
+      statsP.classList.add('visible');
+      replyBtn.style.display = '';
+    } else if (msg.type === 'error') {
+      status.style.display = 'none';
+      errEl.style.display = 'block'; errEl.textContent = 'Warning: ' + msg.text;
+      finish(es, btn);
+    } else if (msg.type === 'done') {
+      const secs = ((Date.now() - startTime) / 1000).toFixed(1);
+      meta.textContent = `${new Date().toLocaleTimeString()} Â· ${secs}s`;
+      finish(es, btn);
+    }
+  };
+  es.onerror = () => {
+    status.style.display = 'none';
+    errEl.style.display = 'block';
+    errEl.textContent = 'Warning: Connection lost. Is the server running?';
+    finish(es, btn);
+  };
+}
+function finish(es, btn) {
+  isSummaryRunning = false;
+  es.close(); btn.disabled = false; btn.textContent = 'Summarise Inbox';
+}
+
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// â”€â”€â”€ Email cards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function renderCards(emails, container) {
+  container.innerHTML = '';
+  emails.forEach(email => {
+    const card = document.createElement('div');
+    card.className = 'email-card' + (email.unread ? '' : ' is-read');
+    card.dataset.entryId = email.entry_id;
+    card.draggable = true;
+
+    const badges = [];
+    if (email.urgent)         badges.push('<span class="badge badge-urgent">URGENT</span>');
+    if (email.has_attachment) badges.push('<span class="badge badge-attach">ATTACH</span>');
+    if (email.rule_score > 0) badges.push(`<span class="badge badge-score">Score ${email.rule_score}</span>`);
+
+    const rulesHint = email.matched_rules?.length
+      ? `<div class="matched-rules-tip">Matched: ${esc(email.matched_rules.join('; '))}</div>` : '';
+
+    const safeId = esc(email.entry_id);
+    card.innerHTML = `
+      <div class="unread-dot"></div>
+      ${badges.join('')}
+      <div class="email-card-body openable" onclick="openEmail('${safeId}')">
+        <div class="email-card-subject">${esc(email.subject)}</div>
+        <div class="email-card-meta">${esc(email.from)} - ${esc(email.received)}</div>
+        ${rulesHint}
+        <div class="open-hint">Click to open in Outlook</div>
+      </div>
+      <span class="replied-badge" id="replied-${safeId}">Replied</span>
+      <div class="card-actions">
+        <button class="card-btn" onclick="openEmail('${safeId}')">Open</button>
+        <button class="card-btn" onclick="flagEmail(this,'${safeId}')">Flag</button>
+        <button class="card-btn${email.unread ? '' : ' done'}"
+          onclick="markEmailRead(this,'${safeId}')"
+          ${email.unread ? '' : 'disabled'}>
+          ${email.unread ? 'Mark Read' : 'Read'}
+        </button>
+      </div>`;
+
+    card.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('text/plain', email.entry_id);
+      e.dataTransfer.effectAllowed = 'copy';
+      setTimeout(() => card.classList.add('dragging'), 0);
+    });
+    card.addEventListener('dragend', () => card.classList.remove('dragging'));
+    container.appendChild(card);
+  });
+}
+
+// â”€â”€â”€ Quick Stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function renderStats(emails) {
+  document.getElementById('stat-total').textContent  = emails.length;
+  document.getElementById('stat-unread').textContent = emails.filter(e => e.unread).length;
+  document.getElementById('stat-urgent').textContent = emails.filter(e => e.urgent).length;
+  document.getElementById('stat-attach').textContent = emails.filter(e => e.has_attachment).length;
+
+  // Top senders (by count, top 5)
+  const counts = {};
+  emails.forEach(e => { const k = e.from || 'Unknown'; counts[k] = (counts[k]||0) + 1; });
+  const sorted = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0,5);
+  const sendersEl = document.getElementById('stats-senders');
+  if (!sorted.length) { sendersEl.innerHTML = '<div style="font-size:.75rem;color:#ccc">No data</div>'; return; }
+  sendersEl.innerHTML = sorted.map(([name, count]) =>
+    `<div class="sender-row">
+       <span class="sender-name">${esc(name)}</span>
+       <span class="sender-count">${count} email${count!==1?'s':''}</span>
+     </div>`
+  ).join('');
+}
+
+// â”€â”€â”€ Reply check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+async function checkReplies() {
+  const btn = document.getElementById('reply-btn');
+  btn.disabled = true; btn.textContent = 'Checking...';
+  try {
+    const res  = await fetch('/check-replied', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({emails: emailData.map(e => ({entry_id: e.entry_id, subject: e.subject}))})
+    });
+    const data = await res.json();
+    if (data.ok) {
+      let found = 0;
+      replyResults = [];
+      for (const [id, info] of Object.entries(data.results)) {
+        if (info) {
+          const el = document.getElementById('replied-' + id);
+          if (el) { el.classList.add('visible'); el.title = `Replied: "${info.subject}" on ${info.sent_on}`; }
+          const original = emailData.find(email => email.entry_id === id) || {};
+          replyResults.push({
+            original_entry_id: id,
+            original_subject: original.subject || '',
+            reply_entry_id: info.entry_id || '',
+            reply_subject: info.subject || '',
+            sent_on: info.sent_on || '',
+            reply_to: info.to || ''
+          });
+          found++;
+        }
+      }
+      renderReplyResults();
+      showToast(found ? `${found} replied email${found>1?"s":""} found` : 'No replies found in Sent Items');
+    } else showToast('Warning: ' + data.error);
+  } catch { showToast('Warning: Could not check replies'); }
+  btn.disabled = false; btn.textContent = 'Check Replies';
+}
+
+async function openEmail(id) {
+  const d = await (await fetch('/open-email',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({entry_id:id})
+  })).json();
+  if (!d.ok) showToast('Warning: ' + d.error);
+}
+
+// â”€â”€â”€ Per-email actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+async function flagEmail(btn, id) {
+  btn.disabled = true; btn.textContent = '...';
+  const d = await (await fetch('/flag-email',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({entry_id:id})})).json();
+  if (d.ok) { btn.textContent='Flagged'; btn.classList.add('flagged'); }
+  else { btn.textContent='Flag'; showToast('Warning: '+d.error); }
+  btn.disabled = false;
+}
+async function markEmailRead(btn, id) {
+  btn.disabled = true; btn.textContent = '...';
+  const d = await (await fetch('/mark-email-read',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({entry_id:id})})).json();
+  if (d.ok) {
+    btn.textContent='Read'; btn.classList.add('done');
+    const card = btn.closest('.email-card');
+    card.classList.add('is-read');
+    card.querySelector('.unread-dot').style.background='transparent';
+  } else { btn.textContent='Mark Read'; btn.disabled=false; showToast('Warning: '+d.error); }
+}
+async function markAllRead() {
+  const btn = document.getElementById('mark-btn');
+  btn.disabled = true; btn.textContent = 'Marking...';
+  const d = await (await fetch('/mark-read',{method:'POST'})).json();
+  showToast(d.ok ? (d.count>0 ? `Marked ${d.count} email${d.count!==1?"s":""} as read` : 'No unread emails') : 'Warning: '+d.error);
+  btn.disabled = false; btn.textContent = 'Mark All Read';
+}
+
+// â”€â”€â”€ Keepers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+async function clearKeepers() {
+  await clearWatchingItems();
+  collapsedThreads.clear();
+  renderKeepers();
+  showToast('Watching cleared');
+}
+
+function toggleThread(threadId) {
+  if (collapsedThreads.has(threadId)) collapsedThreads.delete(threadId);
+  else collapsedThreads.add(threadId);
+  renderKeepers();
+}
+
+function threadBadges(message) {
+  const badges = [];
+  if (message.urgent) badges.push('<span class="badge badge-urgent">URGENT</span>');
+  if (message.has_attachment) badges.push('<span class="badge badge-attach">ATTACH</span>');
+  if (message.unread) badges.push('<span class="badge badge-score">NEW</span>');
+  return badges.length ? `<div class="thread-badges">${badges.join('')}</div>` : '';
+}
+
+function renderKeepers() {
+  const panel = document.getElementById('keepers-panel');
+  const list  = document.getElementById('keepers-list');
+  list.innerHTML = '';
+  panel.classList.toggle('visible', keepers.length > 0 || emailData.length > 0);
+
+  if (!keepers.length) {
+    const empty = document.createElement('div');
+    empty.className = 'keepers-empty';
+    empty.id = 'keepers-empty';
+    empty.textContent = 'Drag an email here to watch the whole conversation thread. New matching replies will join it automatically.';
+    list.appendChild(empty);
+    return;
+  }
+
+  keepers.forEach(thread => {
+    const isCollapsed = collapsedThreads.has(thread.thread_id);
+    const messages = thread.messages || [];
+    const latestEntryId = thread.latest_entry_id || thread.seed_entry_id;
+    const latestSubject = thread.latest_subject || thread.subject || '(No Subject)';
+    const messageHtml = messages.map(message => `
+      <div class="thread-message">
+        <div class="thread-message-main" onclick="openEmail('${esc(message.entry_id)}')">
+          <div class="thread-message-subject">${esc(message.subject)}</div>
+          <div class="thread-message-meta">${esc(message.from)} - ${esc(message.received)}</div>
+          ${threadBadges(message)}
+        </div>
+        <button class="card-btn" onclick="openEmail('${esc(message.entry_id)}')">Open</button>
+      </div>`).join('');
+
+    const card = document.createElement('div');
+    card.className = 'watch-thread';
+    card.innerHTML = `
+      <div class="thread-header">
+        <div class="thread-main">
+          <div class="thread-toggle" onclick="toggleThread(${thread.thread_id})">
+            <span class="thread-chevron${isCollapsed ? ' collapsed' : ''}">▼</span>
+            <div class="thread-title">${esc(latestSubject)} <span class="thread-count">${messages.length}</span></div>
+          </div>
+          <div class="thread-meta">${esc(thread.latest_from || 'Unknown')} - ${esc(thread.latest_received || '')}</div>
+        </div>
+        <div class="thread-actions">
+          <button class="card-btn" onclick="openEmail('${esc(latestEntryId)}')">Open Latest</button>
+          <button class="keeper-remove" onclick="removeKeeper(${thread.thread_id})" title="Remove this watched thread only">Remove</button>
+        </div>
+      </div>
+      <div class="thread-messages${isCollapsed ? ' collapsed' : ''}">${messageHtml}</div>`;
+    list.appendChild(card);
+  });
+}
+
+async function removeKeeper(threadId) {
+  collapsedThreads.delete(threadId);
+  const data = await deleteWatchingItem(threadId);
+  renderKeepers();
+  showToast(data.ok ? 'Removed from Watching' : 'Warning: ' + data.error);
+}
+
+// Keepers drop zone
+const keepersTray = document.getElementById('keepers-panel');
+keepersTray.addEventListener('dragover', e => {
+  if (e.dataTransfer.types.includes('text/plain')) { e.preventDefault(); keepersTray.classList.add('drop-active'); }
+});
+keepersTray.addEventListener('dragleave', () => keepersTray.classList.remove('drop-active'));
+keepersTray.addEventListener('drop', async e => {
+  keepersTray.classList.remove('drop-active');
+  const id = e.dataTransfer.getData('text/plain');
+  if (!id) return;
+  e.preventDefault();
+  const watchable = findWatchableItemByEntryId(id);
+  if (watchable) {
+    const data = await saveWatchingItem(watchable);
+    renderKeepers();
+    showToast(data.ok ? (data.message || 'Watching updated') : 'Warning: ' + data.error);
+  }
+});
+
+// â”€â”€â”€ Rules modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+async function openRules() {
+  const res = await fetch('/rules');
+  rulesConfig = await res.json();
+  document.getElementById('r-my-email').value = rulesConfig.my_email || '';
+  document.getElementById('r-my-name').value  = rulesConfig.my_name  || '';
+  renderBuiltinRules(rulesConfig.rules || []);
+  renderCustomRules(rulesConfig.custom_rules || []);
+  document.getElementById('rules-modal').classList.add('open');
+}
+function closeRules() { document.getElementById('rules-modal').classList.remove('open'); }
+
+function renderBuiltinRules(rules) {
+  document.getElementById('builtin-rules-list').innerHTML = rules.map((r,i) => `
+    <div class="rule-row">
+      <button class="rule-toggle ${r.enabled?'on':''}" onclick="toggleBuiltin(${i})"></button>
+      <div class="rule-info">
+        <div class="rule-name">${esc(r.name)}</div>
+        <div class="rule-desc">${esc(r.description||'')}</div>
+      </div>
+      <div class="rule-score-wrap">
+        <label>Score</label>
+        <input class="rule-score-input" type="number" value="${r.score}" min="1" max="999"
+               onchange="updateBuiltinScore(${i},this.value)">
+      </div>
+    </div>`).join('');
+}
+function renderCustomRules(rules) {
+  const el = document.getElementById('custom-rules-list');
+  if (!rules.length) { el.innerHTML = '<div style="font-size:.78rem;color:#ccc;padding:5px 0">No custom rules yet.</div>'; return; }
+  el.innerHTML = rules.map((r,i) => `
+    <div class="rule-row">
+      <button class="rule-toggle ${r.enabled?'on':''}" onclick="toggleCustom(${i})"></button>
+      <div class="rule-info">
+        <div class="rule-name">${esc(r.name)}</div>
+        <div class="rule-desc">${(r.conditions||[]).map(c=>esc(condLabel(c))).join(' AND ')}</div>
+      </div>
+      <div class="rule-score-wrap">
+        <label>Score</label>
+        <input class="rule-score-input" type="number" value="${r.score}" min="1" max="999"
+               onchange="updateCustomScore(${i},this.value)">
+      </div>
+      <button class="rule-delete" onclick="deleteCustom('${esc(r.id)}')">Delete</button>
+    </div>`).join('');
+}
+function condLabel(c) {
+  const m={to_only_me:'Sent only to me',to_me:'My email in To',cc_only_me:'CC only',
+    at_mention:'@mention in body',from_address:'From: '+c.value,from_domain:'Domain: '+c.value,
+    subject_contains:'Subject: "'+c.value+'"',body_contains:'Body: "'+c.value+'"',has_attachment:'Has attachment'};
+  return m[c.type]||c.type;
+}
+function toggleBuiltin(i)  { rulesConfig.rules[i].enabled=!rulesConfig.rules[i].enabled; renderBuiltinRules(rulesConfig.rules); }
+function toggleCustom(i)   { rulesConfig.custom_rules[i].enabled=!rulesConfig.custom_rules[i].enabled; renderCustomRules(rulesConfig.custom_rules); }
+function updateBuiltinScore(i,v) { rulesConfig.rules[i].score=parseInt(v)||0; }
+function updateCustomScore(i,v)  { rulesConfig.custom_rules[i].score=parseInt(v)||0; }
+
+function condTypeChanged() {
+  const v = document.getElementById('add-cond').value;
+  const needs = ['from_address','from_domain','subject_contains','body_contains'];
+  const inp = document.getElementById('add-val');
+  inp.style.display = needs.includes(v) ? '' : 'none';
+  inp.placeholder = v==='from_domain' ? 'e.g. company.com' : 'Enter value';
+  if (!needs.includes(v)) inp.value='';
+}
+function addCustomRule() {
+  const name  = document.getElementById('add-name').value.trim();
+  const cond  = document.getElementById('add-cond').value;
+  const val   = document.getElementById('add-val').value.trim();
+  const score = parseInt(document.getElementById('add-score').value)||50;
+  if (!name||!cond) { showToast('Warning: Name and condition required'); return; }
+  const condition = val ? {type:cond,value:val} : {type:cond};
+  rulesConfig.custom_rules = rulesConfig.custom_rules||[];
+  rulesConfig.custom_rules.push({id:Math.random().toString(36).slice(2,8),name,score,enabled:true,builtin:false,conditions:[condition]});
+  renderCustomRules(rulesConfig.custom_rules);
+  document.getElementById('add-name').value='';
+  document.getElementById('add-cond').value='';
+  document.getElementById('add-val').value='';
+  document.getElementById('add-val').style.display='none';
+  document.getElementById('add-score').value=50;
+}
+async function deleteCustom(id) {
+  await fetch('/rules/custom/'+id,{method:'DELETE'});
+  rulesConfig.custom_rules=rulesConfig.custom_rules.filter(r=>r.id!==id);
+  renderCustomRules(rulesConfig.custom_rules);
+}
+async function autoDetectIdentity() {
+  const d = await (await fetch('/my-identity')).json();
+  if (d.ok) { document.getElementById('r-my-email').value=d.email; document.getElementById('r-my-name').value=d.name; showToast('Detected from Outlook'); }
+  else showToast('Warning: ' + d.error);
+}
+async function saveRules() {
+  rulesConfig.my_email = document.getElementById('r-my-email').value.trim().toLowerCase();
+  rulesConfig.my_name  = document.getElementById('r-my-name').value.trim();
+  await fetch('/rules',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rulesConfig)});
+  showToast('Rules saved'); closeRules();
+}
+
+// â”€â”€â”€ Toast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function showToast(msg) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+initTheme();
+initAutoRefresh();
+fetchWatching().then(renderKeepers);
+</script>
+</body>
+</html>
+
+
+
+
