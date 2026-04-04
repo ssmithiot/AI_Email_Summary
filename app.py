@@ -195,20 +195,57 @@ def _build_local_summary(emails):
 def build_mode_config(args):
     mode = args.get("mode", "quantity")
     include_subfolders = str(args.get("include_subfolders", "")).lower() in {"1", "true", "yes", "on"}
+    try:
+        scan_cap = max(25, min(1000, int(args.get("scan_cap", 100))))
+    except ValueError:
+        scan_cap = 100
+    filter_text = (args.get("filter_text", "") or "").strip()
+    filter_from = (args.get("filter_from", "") or "").strip()
+    filter_to = (args.get("filter_to", "") or "").strip()
+    filter_subject = (args.get("filter_subject", "") or "").strip()
+    unread_only = str(args.get("filter_unread", "")).lower() in {"1", "true", "yes", "on"}
+    attachments_only = str(args.get("filter_attach", "")).lower() in {"1", "true", "yes", "on"}
+
+    def apply_common_filters(label):
+        if filter_from:
+            label += f" from '{filter_from}'"
+        if filter_to:
+            label += f" to '{filter_to}'"
+        if filter_subject:
+            label += f" subject '{filter_subject}'"
+        if filter_text:
+            label += f" keyword '{filter_text}'"
+        if unread_only:
+            label += " (unread only)"
+        if attachments_only:
+            label += " (attachments only)"
+        return label
+
+    def scanning_status(label):
+        if mode == "date":
+            return f"Connecting to Outlook ({label})..."
+        return f"Connecting to Outlook ({label}). Scanning up to {scan_cap} recent email{'s' if scan_cap != 1 else ''} for matches..."
+
     if mode == "unread":
         label = "unread emails"
         if include_subfolders:
             label += " including Inbox subfolders"
-        return {"mode": "unread", "label": label, "include_subfolders": include_subfolders}
+        return {
+            "mode": "unread",
+            "label": apply_common_filters(label),
+            "status_text": scanning_status(apply_common_filters(label)),
+            "include_subfolders": include_subfolders,
+            "filter_text": filter_text,
+            "filter_from": filter_from,
+            "filter_to": filter_to,
+            "filter_subject": filter_subject,
+            "filter_unread": unread_only,
+            "filter_attach": attachments_only,
+            "scan_cap": scan_cap,
+        }
     if mode == "date":
         now = datetime.now()
         range_type = args.get("range", "7days")
-        filter_text = (args.get("filter_text", "") or "").strip()
-        filter_from = (args.get("filter_from", "") or "").strip()
-        filter_to = (args.get("filter_to", "") or "").strip()
-        filter_subject = (args.get("filter_subject", "") or "").strip()
-        unread_only = str(args.get("filter_unread", "")).lower() in {"1", "true", "yes", "on"}
-        attachments_only = str(args.get("filter_attach", "")).lower() in {"1", "true", "yes", "on"}
         if range_type == "today":
             since = now.replace(hour=0, minute=0, second=0, microsecond=0)
             until = None
@@ -238,23 +275,12 @@ def build_mode_config(args):
             since = now - timedelta(days=7)
             until = None
             label = "emails from the last 7 days"
-        if filter_from:
-            label += f" from '{filter_from}'"
-        if filter_to:
-            label += f" to '{filter_to}'"
-        if filter_subject:
-            label += f" subject '{filter_subject}'"
-        if filter_text:
-            label += f" keyword '{filter_text}'"
-        if unread_only:
-            label += " (unread only)"
-        if attachments_only:
-            label += " (attachments only)"
         return {
             "mode": "date",
             "since": since,
             "until": until,
-            "label": label,
+            "label": apply_common_filters(label),
+            "status_text": scanning_status(apply_common_filters(label)),
             "include_subfolders": include_subfolders,
             "filter_text": filter_text,
             "filter_from": filter_from,
@@ -262,6 +288,7 @@ def build_mode_config(args):
             "filter_subject": filter_subject,
             "filter_unread": unread_only,
             "filter_attach": attachments_only,
+            "scan_cap": scan_cap,
         }
 
     try:
@@ -271,7 +298,20 @@ def build_mode_config(args):
     label = f"{count} most recent emails"
     if include_subfolders:
         label += " including Inbox subfolders"
-    return {"mode": "quantity", "count": count, "label": label, "include_subfolders": include_subfolders}
+    return {
+        "mode": "quantity",
+        "count": count,
+        "label": apply_common_filters(label),
+        "status_text": scanning_status(apply_common_filters(label)),
+        "include_subfolders": include_subfolders,
+        "filter_text": filter_text,
+        "filter_from": filter_from,
+        "filter_to": filter_to,
+        "filter_subject": filter_subject,
+        "filter_unread": unread_only,
+        "filter_attach": attachments_only,
+        "scan_cap": scan_cap,
+    }
 
 
 def get_outlook_namespace():
@@ -1185,7 +1225,7 @@ def summarize():
         mode_config = build_mode_config(request.args)
 
         try:
-            status = json.dumps({"type": "status", "text": f"Connecting to Outlook ({mode_config['label']})..."})
+            status = json.dumps({"type": "status", "text": mode_config.get("status_text") or f"Connecting to Outlook ({mode_config['label']})..."})
             yield f"data: {status}\n\n"
             emails = get_outlook_emails(mode_config)
         except RuntimeError as exc:

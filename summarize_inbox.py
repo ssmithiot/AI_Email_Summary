@@ -284,9 +284,12 @@ def get_outlook_emails(mode_config):
         unread_only = bool(mode_config.get("filter_unread"))
         attachments_only = bool(mode_config.get("filter_attach"))
         include_subfolders = bool(mode_config.get("include_subfolders"))
+        scan_cap = max(25, int(mode_config.get("scan_cap", 100) or 100))
         folders = list(_iter_mail_folders(inbox)) if include_subfolders else [inbox]
 
         emails = []
+        stop_early = False
+        inspected_count = 0
         for folder in folders:
             try:
                 messages = folder.Items
@@ -296,6 +299,11 @@ def get_outlook_emails(mode_config):
 
             for msg in messages:
                 try:
+                    if mode in {"quantity", "unread"}:
+                        if inspected_count >= scan_cap:
+                            stop_early = True
+                            break
+                        inspected_count += 1
                     if mode == "unread" and not msg.UnRead:
                         continue
                     received = getattr(msg, "ReceivedTime", None)
@@ -305,18 +313,22 @@ def get_outlook_emails(mode_config):
                     if received_dt and mode == "date" and since and received_dt < since:
                         continue
                     record = build_email_record(msg)
-                    if mode == "date":
-                        if unread_only and not record.get("unread"):
-                            continue
-                        if attachments_only and not record.get("has_attachment"):
-                            continue
-                        if not _matches_structured_filters(record, filter_from, filter_to, filter_subject):
-                            continue
-                        if not _matches_text_filter(record, filter_text):
-                            continue
+                    if unread_only and not record.get("unread"):
+                        continue
+                    if attachments_only and not record.get("has_attachment"):
+                        continue
+                    if not _matches_structured_filters(record, filter_from, filter_to, filter_subject):
+                        continue
+                    if not _matches_text_filter(record, filter_text):
+                        continue
                     emails.append(record)
+                    if mode == "quantity" and len(emails) >= max_count:
+                        stop_early = True
+                        break
                 except Exception:
                     continue
+            if stop_early:
+                break
 
         emails.sort(key=lambda item: item.get("received_sort", ""), reverse=True)
         if mode == "quantity":

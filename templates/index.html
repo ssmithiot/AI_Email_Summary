@@ -64,9 +64,21 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .date-filter-checks{display:flex;gap:12px;flex-wrap:wrap}
 .date-filter-checks label{display:flex;align-items:center;gap:6px;font-size:.74rem;font-weight:600;color:#666}
 .date-filter-checks input{accent-color:#6c63ff}
-.folder-scope{margin-top:10px;padding-top:10px;border-top:1px solid #eef2f7}
-.folder-scope label{display:flex;align-items:center;gap:8px;font-size:.75rem;font-weight:600;color:#666}
-.folder-scope input{accent-color:#6c63ff}
+.scan-scope-box{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.scan-scope-box.collapsed .scan-scope-content{display:none}
+.scan-scope-header{display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer}
+.scan-scope-title-wrap{display:flex;align-items:center;gap:8px}
+.scan-scope-chevron{font-size:.78rem;color:#6c63ff;transition:transform .15s}
+.scan-scope-box.collapsed .scan-scope-chevron{transform:rotate(-90deg)}
+.scan-scope-label{font-size:.77rem;font-weight:700;color:#666}
+.scan-scope-hint{font-size:.71rem;color:#8b90a7;line-height:1.45}
+.scan-scope-option{display:flex;align-items:center;gap:8px;font-size:.75rem;font-weight:600;color:#666}
+.scan-scope-option input{accent-color:#6c63ff}
+.scan-scope-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.scan-cap-wrap{display:flex;align-items:center;gap:8px}
+.scan-cap-wrap label{font-size:.74rem;font-weight:700;color:#666}
+.scan-cap-wrap select{border:1.5px solid #e2e8f0;border-radius:7px;padding:4px 8px;font-size:.76rem;outline:none;background:#fff}
+.scan-cap-wrap select:focus{border-color:#6c63ff}
 .qty-row{display:flex;align-items:center;gap:10px}
 .qty-row input[type=range]{flex:1;accent-color:#6c63ff}
 .qty-label{font-weight:700;color:#6c63ff;min-width:24px;font-size:.9rem;text-align:right}
@@ -319,8 +331,13 @@ body.dark-mode .date-filter-box{border-top-color:#2a3245}
 body.dark-mode .date-filter-box label,
 body.dark-mode .date-filter-checks label{color:#8f9ab3}
 body.dark-mode .date-filter-box input[type=text]{background:#151b27;color:#eef2ff;border-color:#364158}
-body.dark-mode .folder-scope{border-top-color:#2a3245}
-body.dark-mode .folder-scope label{color:#8f9ab3}
+body.dark-mode .scan-scope-box{background:#181d29;border-color:#2a3245}
+body.dark-mode .scan-scope-chevron{color:#c6b7ff}
+body.dark-mode .scan-scope-label,
+body.dark-mode .scan-scope-option,
+body.dark-mode .scan-scope-hint{color:#8f9ab3}
+body.dark-mode .scan-cap-wrap label{color:#8f9ab3}
+body.dark-mode .scan-cap-wrap select{background:#151b27;color:#eef2ff;border-color:#364158}
 body.dark-mode .mode-card.active{background:#23283a;box-shadow:0 0 0 3px rgba(108,99,255,.18)}
 body.dark-mode .stat-box{background:#151b27;border-color:#252d40}
 body.dark-mode .sender-row,
@@ -439,39 +456,6 @@ body.dark-mode .modal-overlay{background:rgba(0,0,0,.65)}
             <input type="date" id="custom-end-date">
           </div>
         </div>
-        <div class="date-filter-box">
-          <div class="date-filter-header">
-            <label>Search criteria</label>
-            <button class="filter-refresh" type="button" onclick="refreshSearchSuggestions()">Refresh suggestions</button>
-          </div>
-          <div class="filter-hint">Use Outlook-style filters like people in <strong>From</strong> or <strong>To</strong>, plus subject and keyword search across the selected date range.</div>
-          <div class="date-filter-grid">
-            <div>
-              <label for="date-filter-from">From</label>
-              <input type="text" id="date-filter-from" list="contact-suggestions" placeholder="Name or email, e.g. Tiago">
-            </div>
-            <div>
-              <label for="date-filter-to">To</label>
-              <input type="text" id="date-filter-to" list="contact-suggestions" placeholder="Name or email">
-            </div>
-          </div>
-          <div>
-            <label for="date-filter-subject">Subject Contains</label>
-            <input type="text" id="date-filter-subject" placeholder='Text in subject, e.g. "invoice"'>
-          </div>
-          <div>
-            <label for="date-filter-text">Keyword</label>
-            <input type="text" id="date-filter-text" placeholder="Extra text search in subject or body">
-          </div>
-          <div class="date-filter-checks">
-            <label><input type="checkbox" id="date-filter-unread"> Only unread</label>
-            <label><input type="checkbox" id="date-filter-attach"> Has attachments</label>
-          </div>
-        </div>
-        <div class="folder-scope">
-          <label><input type="checkbox" id="include-subfolders"> Include Inbox subfolders</label>
-        </div>
-        <datalist id="contact-suggestions"></datalist>
       </div>
 
       <!-- Quantity sub-options -->
@@ -481,6 +465,61 @@ body.dark-mode .modal-overlay{background:rgba(0,0,0,.65)}
           <input type="range" id="qty-slider" min="5" max="100" value="30" step="5"
                  oninput="document.getElementById('qty-label').textContent=this.value">
           <span class="qty-label" id="qty-label">30</span>
+        </div>
+      </div>
+
+      <div class="scan-scope-box collapsed" id="scan-scope-box">
+        <div class="scan-scope-header" onclick="toggleAdvancedScan()">
+          <div class="scan-scope-title-wrap">
+            <span class="scan-scope-chevron">▼</span>
+            <div class="scan-scope-label">Advanced Scan</div>
+          </div>
+          <div class="scan-scope-hint">Expand for filters and scope</div>
+        </div>
+        <div class="scan-scope-content">
+          <div class="scan-scope-row">
+            <label class="scan-scope-option"><input type="checkbox" id="include-subfolders"> Include Inbox subfolders</label>
+            <div class="scan-cap-wrap">
+              <label for="scan-cap">Scan cap</label>
+              <select id="scan-cap">
+                <option value="50">50</option>
+                <option value="100" selected>100</option>
+                <option value="200">200</option>
+                <option value="500">500</option>
+              </select>
+            </div>
+          </div>
+          <div class="scan-scope-hint">Scan cap applies to Most Recent and Unread scans when we are searching for matches. Default is 100 recent emails inspected.</div>
+          <div class="date-filter-box">
+            <div class="date-filter-header">
+              <label>Search criteria</label>
+              <button class="filter-refresh" type="button" onclick="refreshSearchSuggestions()">Refresh suggestions</button>
+            </div>
+            <div class="filter-hint">Use Outlook-style filters like people in <strong>From</strong> or <strong>To</strong>, plus subject and keyword search. These filters stay available in every mode.</div>
+            <div class="date-filter-grid">
+              <div>
+                <label for="date-filter-from">From</label>
+                <input type="text" id="date-filter-from" list="contact-suggestions" placeholder="Name or email, e.g. Tiago">
+              </div>
+              <div>
+                <label for="date-filter-to">To</label>
+                <input type="text" id="date-filter-to" list="contact-suggestions" placeholder="Name or email">
+              </div>
+            </div>
+            <div>
+              <label for="date-filter-subject">Subject Contains</label>
+              <input type="text" id="date-filter-subject" placeholder='Text in subject, e.g. "invoice"'>
+            </div>
+            <div>
+              <label for="date-filter-text">Keyword</label>
+              <input type="text" id="date-filter-text" placeholder="Extra text search in subject or body">
+            </div>
+            <div class="date-filter-checks">
+              <label><input type="checkbox" id="date-filter-unread"> Only unread</label>
+              <label><input type="checkbox" id="date-filter-attach"> Has attachments</label>
+            </div>
+          </div>
+          <datalist id="contact-suggestions"></datalist>
         </div>
       </div>
 
@@ -496,7 +535,7 @@ body.dark-mode .modal-overlay{background:rgba(0,0,0,.65)}
           <span class="auto-refresh-label">Auto Update Inbox</span>
           <label class="auto-refresh-toggle">
             <input type="checkbox" id="auto-refresh-enabled" onchange="toggleAutoRefresh()">
-            <span>Unread only</span>
+            <span>On</span>
           </label>
         </div>
         <div class="auto-refresh-row">
@@ -508,6 +547,7 @@ body.dark-mode .modal-overlay{background:rgba(0,0,0,.65)}
           </select>
         </div>
         <div class="auto-refresh-status" id="auto-refresh-status">Auto update is off</div>
+        <div class="auto-refresh-last" id="auto-refresh-note">When enabled, auto update checks unread Inbox email only.</div>
         <div class="auto-refresh-last" id="last-scan-status">Last scan: not yet run</div>
       </div>
 
@@ -707,12 +747,15 @@ function initTheme() {
 
 function updateAutoRefreshStatus() {
   const status = document.getElementById('auto-refresh-status');
+  const note = document.getElementById('auto-refresh-note');
   document.getElementById('last-scan-status').textContent = lastScanLabel;
   if (!autoRefreshEnabled) {
     status.textContent = 'Auto update is off';
+    note.textContent = 'When enabled, auto update checks unread Inbox email only.';
     return;
   }
-  status.textContent = `Watching unread inbox every ${autoRefreshMinutes} minute${autoRefreshMinutes !== 1 ? 's' : ''}`;
+  status.textContent = `Auto update runs every ${autoRefreshMinutes} minute${autoRefreshMinutes !== 1 ? 's' : ''}`;
+  note.textContent = 'Auto update checks unread Inbox email only.';
 }
 
 function currentModeLabel(modeOverride = null) {
@@ -811,6 +854,18 @@ function initSearchSuggestionInputs() {
   });
 }
 
+function toggleAdvancedScan(forceExpanded = null) {
+  const box = document.getElementById('scan-scope-box');
+  if (!box) return;
+  const shouldExpand = forceExpanded === null ? box.classList.contains('collapsed') : !!forceExpanded;
+  box.classList.toggle('collapsed', !shouldExpand);
+}
+
+function isAdvancedScanEnabled() {
+  const box = document.getElementById('scan-scope-box');
+  return !!box && !box.classList.contains('collapsed');
+}
+
 async function refreshSearchSuggestions() {
   searchSuggestionsLoaded = false;
   lastSuggestionQuery = '';
@@ -841,19 +896,22 @@ function selectRange(range, el) {
 function buildUrl(modeOverride) {
   const activeMode = modeOverride || currentMode;
   const p = new URLSearchParams({mode: activeMode});
-  if (document.getElementById('include-subfolders').checked) p.set('include_subfolders', '1');
-  if (activeMode === 'date') {
-    p.set('range', currentRange);
-    if (currentRange === 'custom') {
-      p.set('custom_start', document.getElementById('custom-start-date').value);
-      p.set('custom_end', document.getElementById('custom-end-date').value);
-    }
+  if (isAdvancedScanEnabled()) {
+    if (document.getElementById('include-subfolders').checked) p.set('include_subfolders', '1');
+    p.set('scan_cap', document.getElementById('scan-cap').value || '100');
     p.set('filter_from', document.getElementById('date-filter-from').value.trim());
     p.set('filter_to', document.getElementById('date-filter-to').value.trim());
     p.set('filter_subject', document.getElementById('date-filter-subject').value.trim());
     p.set('filter_text', document.getElementById('date-filter-text').value.trim());
     if (document.getElementById('date-filter-unread').checked) p.set('filter_unread', '1');
     if (document.getElementById('date-filter-attach').checked) p.set('filter_attach', '1');
+  }
+  if (activeMode === 'date') {
+    p.set('range', currentRange);
+    if (currentRange === 'custom') {
+      p.set('custom_start', document.getElementById('custom-start-date').value);
+      p.set('custom_end', document.getElementById('custom-end-date').value);
+    }
   }
   if (activeMode === 'quantity') p.set('count', document.getElementById('qty-slider').value);
   return '/summarize?' + p;
