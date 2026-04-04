@@ -479,6 +479,7 @@ body.dark-mode .modal-overlay{background:rgba(0,0,0,.65)}
         <div class="scan-scope-content">
           <div class="scan-scope-row">
             <label class="scan-scope-option"><input type="checkbox" id="include-subfolders"> Include Inbox subfolders</label>
+            <label class="scan-scope-option"><input type="checkbox" id="include-all-inboxes"> Scan all account inboxes</label>
             <div class="scan-cap-wrap">
               <label for="scan-cap">Scan cap</label>
               <select id="scan-cap">
@@ -898,6 +899,7 @@ function buildUrl(modeOverride) {
   const p = new URLSearchParams({mode: activeMode});
   if (isAdvancedScanEnabled()) {
     if (document.getElementById('include-subfolders').checked) p.set('include_subfolders', '1');
+    if (document.getElementById('include-all-inboxes').checked) p.set('include_all_inboxes', '1');
     p.set('scan_cap', document.getElementById('scan-cap').value || '100');
     p.set('filter_from', document.getElementById('date-filter-from').value.trim());
     p.set('filter_to', document.getElementById('date-filter-to').value.trim());

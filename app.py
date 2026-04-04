@@ -1,5 +1,6 @@
 import json
 import os
+import queue
 import sqlite3
 import threading
 import uuid
@@ -15,11 +16,19 @@ from flask import Flask, Response, jsonify, render_template, request, stream_wit
 from openai import OpenAI
 
 from rules_engine import CONDITION_LABELS, VALUE_CONDITIONS, apply_rules, load_rules, save_rules, strip_prefixes
-from summarize_inbox import build_email_record, format_emails_for_claude, get_outlook_emails, normalize_message_id, normalize_subject
+from summarize_inbox import (
+    build_email_record,
+    format_emails_for_claude,
+    get_outlook_emails,
+    get_outlook_namespace,
+    normalize_message_id,
+    normalize_subject,
+)
 
-load_dotenv()
+BASE_DIR = os.path.dirname(__file__)
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 app = Flask(__name__)
-WATCHING_DB = os.path.join(os.path.dirname(__file__), "watching.db")
+WATCHING_DB = os.path.join(BASE_DIR, "watching.db")
 GENERIC_SUBJECTS = {"", "(no subject)", "hi", "hello", "thanks", "thank you", "question", "follow up"}
 
 PROMPT_TEMPLATE = """You are reviewing {count} emails from an Outlook inbox, already sorted by a user-defined priority scoring system (highest score = most important to the user).
@@ -195,6 +204,7 @@ def _build_local_summary(emails):
 def build_mode_config(args):
     mode = args.get("mode", "quantity")
     include_subfolders = str(args.get("include_subfolders", "")).lower() in {"1", "true", "yes", "on"}
+    include_all_inboxes = str(args.get("include_all_inboxes", "")).lower() in {"1", "true", "yes", "on"}
     try:
         scan_cap = max(25, min(1000, int(args.get("scan_cap", 100))))
     except ValueError:
@@ -207,6 +217,8 @@ def build_mode_config(args):
     attachments_only = str(args.get("filter_attach", "")).lower() in {"1", "true", "yes", "on"}
 
     def apply_common_filters(label):
+        if include_all_inboxes:
+            label += " across all account inboxes"
         if filter_from:
             label += f" from '{filter_from}'"
         if filter_to:
@@ -235,6 +247,7 @@ def build_mode_config(args):
             "label": apply_common_filters(label),
             "status_text": scanning_status(apply_common_filters(label)),
             "include_subfolders": include_subfolders,
+            "include_all_inboxes": include_all_inboxes,
             "filter_text": filter_text,
             "filter_from": filter_from,
             "filter_to": filter_to,
@@ -282,6 +295,7 @@ def build_mode_config(args):
             "label": apply_common_filters(label),
             "status_text": scanning_status(apply_common_filters(label)),
             "include_subfolders": include_subfolders,
+            "include_all_inboxes": include_all_inboxes,
             "filter_text": filter_text,
             "filter_from": filter_from,
             "filter_to": filter_to,
@@ -304,6 +318,7 @@ def build_mode_config(args):
         "label": apply_common_filters(label),
         "status_text": scanning_status(apply_common_filters(label)),
         "include_subfolders": include_subfolders,
+        "include_all_inboxes": include_all_inboxes,
         "filter_text": filter_text,
         "filter_from": filter_from,
         "filter_to": filter_to,
@@ -312,11 +327,6 @@ def build_mode_config(args):
         "filter_attach": attachments_only,
         "scan_cap": scan_cap,
     }
-
-
-def get_outlook_namespace():
-    outlook = win32com.client.Dispatch("Outlook.Application")
-    return outlook.GetNamespace("MAPI")
 
 
 def _friendly_outlook_error(exc, action="talk to Outlook"):
@@ -1227,7 +1237,35 @@ def summarize():
         try:
             status = json.dumps({"type": "status", "text": mode_config.get("status_text") or f"Connecting to Outlook ({mode_config['label']})..."})
             yield f"data: {status}\n\n"
-            emails = get_outlook_emails(mode_config)
+
+            result_queue = queue.Queue()
+
+            def read_outlook_worker():
+                try:
+                    result_queue.put(("ok", get_outlook_emails(mode_config)))
+                except Exception as exc:
+                    result_queue.put(("error", exc))
+
+            worker = threading.Thread(target=read_outlook_worker, daemon=True)
+            worker.start()
+
+            wait_seconds = 0
+            emails = None
+            while True:
+                try:
+                    kind, payload = result_queue.get(timeout=2)
+                    if kind == "error":
+                        raise payload
+                    emails = payload
+                    break
+                except queue.Empty:
+                    wait_seconds += 2
+                    if wait_seconds == 10:
+                        yield f"data: {json.dumps({'type': 'status', 'text': 'Still waiting on Outlook. If Outlook has a popup or security prompt, bring it to the front.'})}\n\n"
+                    elif wait_seconds >= 30:
+                        raise RuntimeError(
+                            "Outlook did not respond within 30 seconds. Bring Outlook to the front, close any popups, and try again."
+                        )
         except RuntimeError as exc:
             yield f"data: {json.dumps({'type': 'error', 'text': str(exc)})}\n\n"
             return

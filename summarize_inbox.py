@@ -4,12 +4,14 @@ import sys
 import time
 from datetime import datetime, timedelta
 
+import pythoncom
 import pywintypes
 import win32com.client
 from openai import OpenAI
 from dotenv import load_dotenv
 
-load_dotenv()
+BASE_DIR = os.path.dirname(__file__)
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 BODY_PREVIEW_LEN = 600  # Characters of body to include per email
 TRANSPORT_HEADERS_PROP = "http://schemas.microsoft.com/mapi/proptag/0x007D001E"
@@ -129,6 +131,27 @@ def _iter_mail_folders(folder):
             yield from _iter_mail_folders(child)
     except Exception:
         return
+
+
+def _inbox_folders(namespace, include_all_inboxes=False):
+    if not include_all_inboxes:
+        return [namespace.GetDefaultFolder(6)]
+
+    folders = []
+    seen = set()
+    for index in range(1, namespace.Folders.Count + 1):
+        try:
+            store_root = namespace.Folders.Item(index)
+            inbox = store_root.Folders["Inbox"]
+            key = getattr(inbox, "EntryID", None) or f"idx:{index}"
+            if key in seen:
+                continue
+            seen.add(key)
+            folders.append(inbox)
+        except Exception:
+            continue
+
+    return folders or [namespace.GetDefaultFolder(6)]
 
 
 def _recipient_strings(msg):
@@ -264,15 +287,39 @@ def pick_mode():
     return {"mode": "quantity", "count": count, "label": f"{count} most recent emails"}
 
 
+def get_outlook_namespace():
+    # Prefer attaching to a running Outlook session, but fall back to a direct
+    # COM activation when Outlook is open yet not exposed through GetActiveObject.
+    pythoncom.CoInitialize()
+    errors = []
+
+    try:
+        outlook = win32com.client.GetActiveObject("Outlook.Application")
+        return outlook.GetNamespace("MAPI")
+    except Exception as exc:
+        errors.append(f"attach failed: {exc}")
+
+    try:
+        outlook = win32com.client.Dispatch("Outlook.Application")
+        return outlook.GetNamespace("MAPI")
+    except Exception as exc:
+        errors.append(f"dispatch failed: {exc}")
+
+    raise RuntimeError(
+        "Outlook could not be reached through Windows automation. Outlook appears to be installed, but its COM/MAPI "
+        "session is not available right now. Make sure classic Outlook is fully open to your inbox, no hidden prompts "
+        "are waiting, and Outlook and this app are running at the same privilege level. "
+        f"Details: {'; '.join(errors)}"
+    )
+
+
 def get_outlook_emails(mode_config):
     def _read_messages():
         try:
-            outlook = win32com.client.Dispatch("Outlook.Application")
-        except Exception as exc:
-            raise RuntimeError(f"Could not connect to Outlook. Is it open and logged in?\n{exc}")
-
-        namespace = outlook.GetNamespace("MAPI")
-        inbox = namespace.GetDefaultFolder(6)  # 6 = olFolderInbox
+            namespace = get_outlook_namespace()
+        except RuntimeError:
+            raise
+        inboxes = _inbox_folders(namespace, include_all_inboxes=bool(mode_config.get("include_all_inboxes")))
         mode = mode_config["mode"]
         max_count = mode_config.get("count", 500)
         since = mode_config.get("since")
@@ -285,7 +332,12 @@ def get_outlook_emails(mode_config):
         attachments_only = bool(mode_config.get("filter_attach"))
         include_subfolders = bool(mode_config.get("include_subfolders"))
         scan_cap = max(25, int(mode_config.get("scan_cap", 100) or 100))
-        folders = list(_iter_mail_folders(inbox)) if include_subfolders else [inbox]
+        folders = []
+        for inbox in inboxes:
+            if include_subfolders:
+                folders.extend(list(_iter_mail_folders(inbox)))
+            else:
+                folders.append(inbox)
 
         emails = []
         stop_early = False
