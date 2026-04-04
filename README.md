@@ -2,6 +2,9 @@
 
 A lightweight Windows app that reads your Outlook inbox, scores emails with your custom rules, and generates an AI summary using OpenAI.
 
+## Beta MVP
+This is a beta MVP focused on the easiest local Windows install possible for friends and small-team testing.
+
 ## What It Does
 - Connects to the Outlook desktop app on Windows
 - Pulls inbox emails from Outlook
@@ -10,6 +13,15 @@ A lightweight Windows app that reads your Outlook inbox, scores emails with your
 - Lets you open emails directly in Outlook
 - Tracks watched threads in the Watching panel
 - Checks Sent Items to find replies you already sent
+
+## Screenshots
+Typical app areas your friends will see:
+- Inbox Summary: AI-written summary with citations back to the source emails
+- Watching: collapsible watched conversation threads
+- Replies Found: sent replies you already handled
+- Email Cards: scored emails with open, flag, and read actions
+
+Tip: add screenshots to this README later to make friend installs even easier.
 
 ## Requirements
 - Windows
@@ -65,7 +77,5 @@ Important:
 - If setup fails, make sure Python is installed and available in PATH
 - If Outlook cannot be found, open Outlook and make sure you are signed in
 - If summaries fail, confirm your `OPENAI_API_KEY` is valid
+- If 30+ email summaries fail, try again after the latest update or lower the count temporarily
 - If a package is missing, rerun `setup.bat`
-
-## Beta MVP
-This is currently a beta MVP focused on easy local setup for friends and small-team testing.
