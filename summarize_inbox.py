@@ -1,8 +1,10 @@
 import os
 import re
 import sys
+import time
 from datetime import datetime, timedelta
 
+import pywintypes
 import win32com.client
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -182,38 +184,57 @@ def pick_mode():
 
 
 def get_outlook_emails(mode_config):
-    try:
-        outlook = win32com.client.Dispatch("Outlook.Application")
-    except Exception as exc:
-        raise RuntimeError(f"Could not connect to Outlook. Is it open and logged in?\n{exc}")
-
-    namespace = outlook.GetNamespace("MAPI")
-    inbox = namespace.GetDefaultFolder(6)  # 6 = olFolderInbox
-    messages = inbox.Items
-    messages.Sort("[ReceivedTime]", True)  # Newest first
-
-    mode = mode_config["mode"]
-    max_count = mode_config.get("count", 500)
-    since = mode_config.get("since")
-
-    emails = []
-    count = 0
-    for msg in messages:
-        if mode == "quantity" and count >= max_count:
-            break
+    def _read_messages():
         try:
-            if mode == "unread" and not msg.UnRead:
-                continue
-            received = getattr(msg, "ReceivedTime", None)
-            if hasattr(received, "strftime") and mode == "date" and since and received < since:
-                break
-            record = build_email_record(msg, index=count + 1)
-            emails.append(record)
-            count += 1
-        except Exception:
-            continue
+            outlook = win32com.client.Dispatch("Outlook.Application")
+        except Exception as exc:
+            raise RuntimeError(f"Could not connect to Outlook. Is it open and logged in?\n{exc}")
 
-    return emails
+        namespace = outlook.GetNamespace("MAPI")
+        inbox = namespace.GetDefaultFolder(6)  # 6 = olFolderInbox
+        messages = inbox.Items
+        messages.Sort("[ReceivedTime]", True)  # Newest first
+
+        mode = mode_config["mode"]
+        max_count = mode_config.get("count", 500)
+        since = mode_config.get("since")
+
+        emails = []
+        count = 0
+        for msg in messages:
+            if mode == "quantity" and count >= max_count:
+                break
+            try:
+                if mode == "unread" and not msg.UnRead:
+                    continue
+                received = getattr(msg, "ReceivedTime", None)
+                if hasattr(received, "strftime") and mode == "date" and since and received < since:
+                    break
+                record = build_email_record(msg, index=count + 1)
+                emails.append(record)
+                count += 1
+            except Exception:
+                continue
+
+        return emails
+
+    last_exc = None
+    for attempt in range(2):
+        try:
+            return _read_messages()
+        except pywintypes.com_error as exc:
+            last_exc = exc
+            if attempt == 0:
+                time.sleep(1.5)
+                continue
+            break
+
+    if last_exc is not None:
+        raise RuntimeError(
+            "Outlook is busy or temporarily unavailable right now. Please make sure Outlook is open, wait a few seconds, and try again."
+        )
+
+    raise RuntimeError("Outlook could not be read right now. Please try again.")
 
 
 def format_emails_for_claude(emails):

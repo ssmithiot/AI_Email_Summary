@@ -7,6 +7,7 @@ import webbrowser
 from collections import defaultdict
 from datetime import datetime, timedelta
 
+import pywintypes
 import win32com.client
 import win32gui
 from dotenv import load_dotenv
@@ -144,6 +145,15 @@ def build_mode_config(args):
 def get_outlook_namespace():
     outlook = win32com.client.Dispatch("Outlook.Application")
     return outlook.GetNamespace("MAPI")
+
+
+def _friendly_outlook_error(exc, action="talk to Outlook"):
+    if isinstance(exc, pywintypes.com_error):
+        return (
+            f"Outlook was busy while trying to {action}. "
+            "Please make sure Outlook is open, wait a few seconds, and try again."
+        )
+    return str(exc)
 
 
 def get_db_connection():
@@ -1131,7 +1141,7 @@ def open_email():
                 win32gui.SetForegroundWindow(matches[0])
         return jsonify({"ok": True})
     except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 500
+        return jsonify({"ok": False, "error": _friendly_outlook_error(exc, "open that email")}), 500
 
 
 @app.route("/mark-read", methods=["POST"])
@@ -1149,7 +1159,7 @@ def mark_all_read():
                 continue
         return jsonify({"ok": True, "count": count})
     except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 500
+        return jsonify({"ok": False, "error": _friendly_outlook_error(exc, "mark emails as read")}), 500
 
 
 @app.route("/my-identity")
@@ -1159,7 +1169,12 @@ def my_identity():
         user = ns.CurrentUser
         return jsonify({"ok": True, "email": (user.Address or "").lower(), "name": user.Name or ""})
     except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 500
+        return jsonify({"ok": False, "error": _friendly_outlook_error(exc, "read your Outlook identity")}), 500
+
+
+@app.route("/favicon.ico")
+def favicon():
+    return ("", 204)
 
 
 def open_browser():
