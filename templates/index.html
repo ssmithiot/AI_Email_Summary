@@ -71,6 +71,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .auto-refresh-row select{flex:1;border:1.5px solid #e2e8f0;border-radius:7px;padding:5px 8px;font-size:.78rem;outline:none;background:#fff}
 .auto-refresh-row select:focus{border-color:#6c63ff}
 .auto-refresh-status{font-size:.72rem;color:#9f7aea}
+.auto-refresh-last{font-size:.71rem;color:#8b90a7}
 
 /* â”€â”€ Right panel â€” two sub-columns â”€â”€ */
 .right{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:18px 20px;overflow:hidden;min-height:0}
@@ -298,7 +299,8 @@ body.dark-mode .keepers-clear,
 body.dark-mode .open-hint,
 body.dark-mode .auto-refresh-label,
 body.dark-mode .auto-refresh-toggle,
-body.dark-mode .auto-refresh-status{color:#8f9ab3}
+body.dark-mode .auto-refresh-status,
+body.dark-mode .auto-refresh-last{color:#8f9ab3}
 body.dark-mode .summary-ref{background:#23283a;border-color:#51607e;color:#c6b7ff}
 body.dark-mode .keepers-panel{background:#181d29;border-color:#51607e}
 body.dark-mode .keepers-panel.drop-active{background:#23283a}
@@ -328,7 +330,7 @@ body.dark-mode .modal-overlay{background:rgba(0,0,0,.65)}
   <div class="topbar">
     <div class="topbar-left">
       <h1>Outlook Inbox Summarizer</h1>
-      <span class="topbar-sub">Emails scored &amp; sorted by your rules before Claude summarises</span>
+      <span class="topbar-sub">Emails scored &amp; sorted by your rules before OpenAI summarises</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px"><button class="icon-btn" id="theme-btn" onclick="toggleTheme()">Dark Mode</button><button class="icon-btn" onclick="openRules()">Rules</button></div>
   </div>
@@ -403,6 +405,7 @@ body.dark-mode .modal-overlay{background:rgba(0,0,0,.65)}
           </select>
         </div>
         <div class="auto-refresh-status" id="auto-refresh-status">Auto update is off</div>
+        <div class="auto-refresh-last" id="last-scan-status">Last scan: not yet run</div>
       </div>
 
     </div><!-- /left -->
@@ -573,6 +576,7 @@ let autoRefreshEnabled = false;
 let autoRefreshMinutes = 5;
 let autoRefreshTimer = null;
 let isSummaryRunning = false;
+let lastScanLabel = 'Last scan: not yet run';
 
 function applyTheme() {
   document.body.classList.toggle('dark-mode', darkMode);
@@ -592,6 +596,7 @@ function initTheme() {
 
 function updateAutoRefreshStatus() {
   const status = document.getElementById('auto-refresh-status');
+  document.getElementById('last-scan-status').textContent = lastScanLabel;
   if (!autoRefreshEnabled) {
     status.textContent = 'Auto update is off';
     return;
@@ -842,7 +847,10 @@ function runSummary(options = {}) {
       finish(es, btn);
     } else if (msg.type === 'done') {
       const secs = ((Date.now() - startTime) / 1000).toFixed(1);
-      meta.textContent = `${new Date().toLocaleTimeString()} Â· ${secs}s`;
+      const finishedAt = new Date().toLocaleTimeString();
+      meta.textContent = `${finishedAt} - ${secs}s`;
+      lastScanLabel = `Last scan: ${finishedAt}${triggeredByAuto ? ' (auto)' : ''}`;
+      updateAutoRefreshStatus();
       finish(es, btn);
     }
   };

@@ -47,6 +47,67 @@ Be concise. Use bullets. Respect the priority scoring - emails with higher score
 {emails}"""
 
 
+def _build_local_summary(emails):
+    urgent = [email for email in emails if email.get("urgent")]
+    high_priority = [email for email in emails if email.get("rule_score", 0) > 0][:5]
+    unread_count = sum(1 for email in emails if email.get("unread"))
+    action_items = [
+        email for email in emails
+        if email.get("unread") or email.get("rule_score", 0) >= 50 or email.get("urgent")
+    ][:5]
+
+    sender_counts = {}
+    for email in emails:
+        sender = email.get("from") or "Unknown"
+        sender_counts[sender] = sender_counts.get(sender, 0) + 1
+    top_senders = sorted(sender_counts.items(), key=lambda item: item[1], reverse=True)[:3]
+
+    lines = ["## Urgent / High Priority"]
+    if urgent:
+        for email in urgent[:5]:
+            lines.append(f"- {email['from']} - {email['subject']} [Email {email['index']}]")
+    elif high_priority:
+        for email in high_priority:
+            lines.append(f"- {email['from']} - {email['subject']} [Email {email['index']}]")
+    else:
+        lines.append("- None flagged")
+
+    lines.append("")
+    lines.append("## Quick Stats")
+    lines.append(f"- Total emails: {len(emails)}")
+    lines.append(f"- Unread emails: {unread_count}")
+    lines.append(f"- Urgent emails: {len(urgent)}")
+    lines.append(f"- Needs attention: {len(action_items)}")
+
+    lines.append("")
+    lines.append("## Action Items")
+    if action_items:
+        for email in action_items:
+            reason = "urgent" if email.get("urgent") else "unread" if email.get("unread") else "high priority"
+            lines.append(f"- {email['subject']} from {email['from']} looks {reason}. Open and review next. [Email {email['index']}]")
+    else:
+        lines.append("- None flagged")
+
+    lines.append("")
+    lines.append("## Key Topics")
+    if top_senders:
+        for sender, count in top_senders:
+            lines.append(f"- {sender}: {count} email{'s' if count != 1 else ''}")
+    else:
+        lines.append("- None flagged")
+
+    lines.append("")
+    lines.append("## Can Ignore / Low Priority")
+    low_priority = [email for email in emails if not email.get("urgent") and email.get("rule_score", 0) == 0][:5]
+    if low_priority:
+        for email in low_priority:
+            lines.append(f"- {email['subject']} from {email['from']} [Email {email['index']}]")
+    else:
+        lines.append("- None flagged")
+
+    return "\n".join(lines)
+
+
 def build_mode_config(args):
     mode = args.get("mode", "quantity")
     if mode == "unread":
@@ -837,12 +898,13 @@ def summarize():
                 compact_prompt = PROMPT_TEMPLATE.format(count=len(emails), emails=compact_text)
                 summary_text = _request_summary_text(client, compact_prompt)
             if not summary_text:
-                yield f"data: {json.dumps({'type': 'error', 'text': 'OpenAI returned no summary text.'})}\n\n"
-                return
+                summary_text = _build_local_summary(emails)
+                yield f"data: {json.dumps({'type': 'status', 'text': 'OpenAI was quiet, so a local fallback summary was generated.'})}\n\n"
             yield f"data: {json.dumps({'type': 'text', 'text': summary_text})}\n\n"
         except Exception as exc:
-            yield f"data: {json.dumps({'type': 'error', 'text': f'OpenAI API error: {exc}'})}\n\n"
-            return
+            summary_text = _build_local_summary(emails)
+            yield f"data: {json.dumps({'type': 'status', 'text': f'OpenAI had trouble ({exc}). Showing a local fallback summary instead.'})}\n\n"
+            yield f"data: {json.dumps({'type': 'text', 'text': summary_text})}\n\n"
 
         card_data = [
             {

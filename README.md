@@ -31,14 +31,13 @@ Tip: add screenshots to this README later to make friend installs even easier.
 
 ## Easiest Install
 1. Download or clone this folder.
-2. Double-click `setup.bat`.
-3. When prompted, get your OpenAI API key from:
+2. Double-click `START_HERE.bat`.
+3. If setup appears, let it finish.
+4. When prompted, get your OpenAI API key from:
    `https://platform.openai.com/api-keys`
-4. Paste the key into `.env` so it looks like:
+5. Paste the key into `.env` so it looks like:
    `OPENAI_API_KEY=sk-...`
-5. Double-click `run_summary.bat`.
-
-The browser app will open automatically.
+6. The app will launch in your browser.
 
 ## How To Get An OpenAI API Key
 1. Sign in or create an account at:
@@ -56,7 +55,8 @@ Important:
 - API usage may require a funded OpenAI account depending on your usage limits
 
 ## Running The App
-- Web app: double-click `run_summary.bat`
+- Easiest: double-click `START_HERE.bat`
+- Web app directly: double-click `run_summary.bat`
 - Console summary: double-click `ckemail.bat`
 
 ## First-Time Setup Notes
@@ -77,5 +77,5 @@ Important:
 - If setup fails, make sure Python is installed and available in PATH
 - If Outlook cannot be found, open Outlook and make sure you are signed in
 - If summaries fail, confirm your `OPENAI_API_KEY` is valid
-- If 30+ email summaries fail, try again after the latest update or lower the count temporarily
+- If larger inbox summaries struggle, the app now falls back to a local summary so you still get results
 - If a package is missing, rerun `setup.bat`
