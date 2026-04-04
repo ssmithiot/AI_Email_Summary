@@ -17,7 +17,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .topbar{display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:#fff;border-bottom:1px solid #e2e8f0;z-index:10}
 .topbar-left{display:flex;align-items:center;gap:10px}
 .topbar h1{font-size:1.05rem;font-weight:700;display:flex;align-items:center;gap:7px}
-.topbar-sub{font-size:.75rem;color:#aaa;border-left:1px solid #e2e8f0;padding-left:10px}
+.topbar-sub{font-size:.75rem;color:#aaa;border-left:1px solid #e2e8f0;padding-left:10px;max-width:520px}
 .icon-btn{background:#f7f7fb;border:1.5px solid #e2e8f0;border-radius:8px;padding:6px 14px;font-size:.8rem;font-weight:600;cursor:pointer;color:#555;transition:border-color .15s,color .15s;display:flex;align-items:center;gap:5px}
 .icon-btn:hover{border-color:#6c63ff;color:#6c63ff}
 
@@ -108,8 +108,9 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .reply-result{padding:9px 0;border-bottom:1px solid #f5f5f5}
 .reply-result:last-child{border-bottom:none;padding-bottom:0}
 .reply-result.dragging{opacity:.45}
+.reply-result + .reply-result{margin-top:2px}
 .reply-result-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
-.reply-drag{color:#bbb;font-size:.82rem;cursor:grab;user-select:none;flex-shrink:0;padding-top:2px}
+.reply-drag{color:#9f7aea;font-size:.78rem;cursor:grab;user-select:none;flex-shrink:0;padding:2px 4px;border:1px dashed #d6d3f5;border-radius:6px;line-height:1}
 .reply-drag:active{cursor:grabbing}
 .reply-result-main{flex:1;min-width:0}
 .reply-result-subject{font-size:.8rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -117,6 +118,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .reply-result-note{font-size:.71rem;color:#b0b3c3;margin-top:3px}
 .reply-empty{font-size:.76rem;color:#aaa}
 .reply-callout{font-size:.71rem;color:#8b90a7;margin-bottom:8px;line-height:1.5}
+.thread-pill{display:inline-flex;align-items:center;gap:5px;margin-top:4px;padding:1px 8px;border:1px solid #d6d3f5;border-radius:999px;background:#f7f5ff;color:#6c63ff;font-size:.67rem;font-weight:700}
 .summary-title{font-size:.82rem;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
 .status-msg{color:#aaa;font-size:.84rem;display:flex;align-items:center;gap:8px}
 .spinner{width:14px;height:14px;border:2px solid #ddd;border-top-color:#6c63ff;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
@@ -155,7 +157,9 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .thread-meta{font-size:.71rem;color:#8b90a7;margin-top:2px}
 .thread-count{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#efeaff;color:#6c63ff;font-size:.65rem;font-weight:700}
 .thread-updated{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#ebf8ff;color:#2b6cb0;font-size:.65rem;font-weight:700}
-.thread-actions{display:flex;gap:5px;flex-shrink:0}
+.thread-actions{display:flex;gap:6px;flex-shrink:0;align-items:center}
+.keeper-remove{padding:4px 9px;border-radius:5px;font-size:.71rem;font-weight:600;cursor:pointer;border:1.5px solid #f1b3b3;background:#fff5f5;color:#c53030;transition:all .15s;white-space:nowrap}
+.keeper-remove:hover{border-color:#c53030;background:#fff1f1}
 .thread-messages{margin-top:10px;padding-top:10px;border-top:1px solid #e7def8}
 .thread-messages.collapsed{display:none}
 .thread-message{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid #efeaff}
@@ -323,6 +327,10 @@ body.dark-mode .thread-messages{border-top-color:#2a3245}
 body.dark-mode .thread-message{border-bottom-color:#2a3245}
 body.dark-mode .thread-count{background:#23283a;color:#c6b7ff}
 body.dark-mode .thread-updated{background:#1f2d3d;color:#90cdf4}
+body.dark-mode .keeper-remove{background:#2a1820;border-color:#6b2737;color:#feb2b2}
+body.dark-mode .keeper-remove:hover{background:#321c25;border-color:#fc8181;color:#fed7d7}
+body.dark-mode .reply-drag{border-color:#51607e;color:#c6b7ff}
+body.dark-mode .thread-pill{background:#23283a;border-color:#51607e;color:#c6b7ff}
 body.dark-mode .matched-rules-tip,
 body.dark-mode .keepers-label,
 body.dark-mode .sender-count{color:#c6b7ff}
@@ -340,7 +348,7 @@ body.dark-mode .modal-overlay{background:rgba(0,0,0,.65)}
   <div class="topbar">
     <div class="topbar-left">
       <h1>Outlook Inbox Summarizer</h1>
-      <span class="topbar-sub">Emails scored &amp; sorted by your rules before OpenAI summarises</span>
+      <span class="topbar-sub">Emails scored and sorted by your rules before OpenAI summarizes them into action-ready guidance.</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px"><button class="icon-btn" id="theme-btn" onclick="toggleTheme()">Dark Mode</button><button class="icon-btn" onclick="openRules()">Rules</button></div>
   </div>
@@ -793,7 +801,7 @@ function renderReplyResults() {
   list.innerHTML = replyResults.map(item => `
     <div class="reply-result" data-entry-id="${esc(item.reply_entry_id || item.original_entry_id)}">
       <div class="reply-result-top">
-        <span class="reply-drag" draggable="true" title="Drag to Watching">::</span>
+        <span class="reply-drag" draggable="true" title="Drag to Watching">Drag</span>
         <div class="reply-result-main">
           <div class="reply-result-subject">${esc(item.original_subject || item.reply_subject || '(No Subject)')}</div>
           <div class="reply-result-meta">Reply sent ${esc(item.sent_on)}${item.reply_to ? ` to ${esc(item.reply_to)}` : ''}</div>
@@ -918,6 +926,7 @@ function renderCards(emails, container) {
     if (email.urgent)         badges.push('<span class="badge badge-urgent">URGENT</span>');
     if (email.has_attachment) badges.push('<span class="badge badge-attach">ATTACH</span>');
     if (email.rule_score > 0) badges.push(`<span class="badge badge-score">Score ${email.rule_score}</span>`);
+    if ((email.thread_message_count || 1) > 1) badges.push(`<span class="thread-pill">${email.thread_message_count} in thread</span>`);
 
     const rulesHint = email.matched_rules?.length
       ? `<div class="matched-rules-tip">Matched: ${esc(email.matched_rules.join('; '))}</div>` : '';

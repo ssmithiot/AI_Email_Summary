@@ -26,6 +26,7 @@ PROMPT_TEMPLATE = """You are reviewing {count} emails from an Outlook inbox, alr
 
 Each email may carry tags: [URGENT] = Outlook High Importance; [UNREAD]; [HAS-ATTACHMENT]; [PRIORITY-SCORE:N].
 The "Rules:" line lists which user rules matched that email - use this to understand why it scored highly.
+Some emails belong to the same conversation thread. When that happens, treat the thread as one ongoing conversation instead of repeating the same point for each message.
 
 Return all of these sections in this exact order, even if some are empty:
 1. **Urgent / High Priority** - [URGENT] tagged emails first, then the next highest-scoring emails. Include sender and subject.
@@ -38,14 +39,57 @@ Format rules:
 - Use markdown headings for each section.
 - Use bullet points under every section.
 - If a section has nothing meaningful, write a short bullet like `- None flagged`.
-- In Action Items, say why the email matters and what the user should do next.
+- In Action Items, give plain-English advice about what the user should do next.
+- If an unread email looks like a real human message, assume it deserves review unless the content clearly looks disposable.
+- Avoid robotic wording like "None flagged" when there are unread human emails that probably need a glance.
+- If several messages are clearly from the same thread, mention the thread once and note how many recent messages it contains.
 - Do not stop after the first section.
 
 Whenever you mention a specific email, append a citation in the exact format `[Email N]` using that email's number from the inbox list.
-Be concise. Use bullets. Respect the priority scoring - emails with higher scores matter more to this user.
+Be concise. Use bullets. Respect the priority scoring - emails with higher scores matter more to this user. Sound like a sharp executive assistant, not a log parser.
 
 --- INBOX EMAILS (sorted by priority score, highest first) ---
 {emails}"""
+
+
+def _thread_key(email):
+    conversation_id = (email.get("conversation_id") or "").strip()
+    if conversation_id:
+        return f"cid:{conversation_id}"
+
+    normalized_subject = email.get("normalized_subject") or normalize_subject(email.get("subject"))
+    sender = (email.get("from_email") or email.get("from") or "").strip().lower()
+    if normalized_subject and sender:
+        return f"subj:{normalized_subject}|sender:{sender}"
+    if normalized_subject:
+        return f"subj:{normalized_subject}"
+    return f"entry:{email.get('entry_id')}"
+
+
+def _annotate_threads(emails):
+    grouped = defaultdict(list)
+    for email in emails:
+        grouped[_thread_key(email)].append(email)
+
+    for items in grouped.values():
+        sorted_items = sorted(
+            items,
+            key=lambda item: (item.get("received_sort") or "", item.get("index", 0)),
+            reverse=True,
+        )
+        latest = sorted_items[0]
+        count = len(items)
+        for position, item in enumerate(sorted_items, start=1):
+            item["thread_message_count"] = count
+            item["thread_is_primary"] = item["entry_id"] == latest.get("entry_id")
+            item["thread_latest_subject"] = latest.get("subject") or item.get("subject") or "(No Subject)"
+            item["thread_latest_received"] = latest.get("received") or item.get("received") or ""
+            item["thread_position"] = position
+    return emails
+
+
+def _display_emails(emails):
+    return [email for email in emails if email.get("thread_is_primary", True)]
 
 
 def _build_local_summary(emails):
@@ -66,10 +110,12 @@ def _build_local_summary(emails):
     lines = ["## Urgent / High Priority"]
     if urgent:
         for email in urgent[:5]:
-            lines.append(f"- {email['from']} - {email['subject']} [Email {email['index']}]")
+            thread_note = f" ({email['thread_message_count']} recent messages)" if email.get("thread_message_count", 1) > 1 else ""
+            lines.append(f"- {email['from']} - {email['subject']}{thread_note} [Email {email['index']}]")
     elif high_priority:
         for email in high_priority:
-            lines.append(f"- {email['from']} - {email['subject']} [Email {email['index']}]")
+            thread_note = f" ({email['thread_message_count']} recent messages)" if email.get("thread_message_count", 1) > 1 else ""
+            lines.append(f"- {email['from']} - {email['subject']}{thread_note} [Email {email['index']}]")
     else:
         lines.append("- None flagged")
 
@@ -85,7 +131,15 @@ def _build_local_summary(emails):
     if action_items:
         for email in action_items:
             reason = "urgent" if email.get("urgent") else "unread" if email.get("unread") else "high priority"
-            lines.append(f"- {email['subject']} from {email['from']} looks {reason}. Open and review next. [Email {email['index']}]")
+            if email.get("thread_message_count", 1) > 1:
+                lines.append(
+                    f"- Review the {email['thread_message_count']}-message thread about \"{email['thread_latest_subject']}\" from {email['from']}. "
+                    f"It looks {reason} and probably needs a quick human check. [Email {email['index']}]"
+                )
+            else:
+                lines.append(
+                    f"- Review \"{email['subject']}\" from {email['from']}. It looks {reason} and likely needs a quick human check. [Email {email['index']}]"
+                )
     else:
         lines.append("- None flagged")
 
@@ -102,7 +156,8 @@ def _build_local_summary(emails):
     low_priority = [email for email in emails if not email.get("urgent") and email.get("rule_score", 0) == 0][:5]
     if low_priority:
         for email in low_priority:
-            lines.append(f"- {email['subject']} from {email['from']} [Email {email['index']}]")
+            thread_note = f" ({email['thread_message_count']} in thread)" if email.get("thread_message_count", 1) > 1 else ""
+            lines.append(f"- {email['subject']} from {email['from']}{thread_note} [Email {email['index']}]")
     else:
         lines.append("- None flagged")
 
@@ -893,9 +948,11 @@ def summarize():
             return
 
         emails = apply_rules(emails, load_rules())
+        emails = _annotate_threads(emails)
         refresh_watched_threads(emails)
+        display_emails = _display_emails(emails)
 
-        found_msg = json.dumps({"type": "status", "text": f"Found {len(emails)} emails. Summarizing with OpenAI..."})
+        found_msg = json.dumps({"type": "status", "text": f"Found {len(emails)} emails across {len(display_emails)} active threads. Summarizing with OpenAI..."})
         yield f"data: {found_msg}\n\n"
 
         client = OpenAI(api_key=api_key)
@@ -935,8 +992,11 @@ def summarize():
                 "internet_message_id": email.get("internet_message_id", ""),
                 "in_reply_to": email.get("in_reply_to", ""),
                 "references": email.get("references", []),
+                "thread_message_count": email.get("thread_message_count", 1),
+                "thread_latest_subject": email.get("thread_latest_subject", email["subject"]),
+                "thread_latest_received": email.get("thread_latest_received", email["received"]),
             }
-            for email in emails
+            for email in display_emails
         ]
         yield f"data: {json.dumps({'type': 'emails', 'emails': card_data})}\n\n"
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
