@@ -104,13 +104,12 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .replies-panel.visible{display:block}
 .replies-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .replies-label{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#bbb}
-.replies-count{font-size:.72rem;color:#9f7aea;font-weight:700}
-.reply-result{padding:9px 0;border-bottom:1px solid #f5f5f5}
-.reply-result:last-child{border-bottom:none;padding-bottom:0}
+.replies-count{font-size:.7rem;color:#6c63ff;font-weight:700;background:#f7f5ff;border:1px solid #ddd6fe;border-radius:999px;padding:2px 8px;min-width:24px;text-align:center}
+.reply-result{padding:10px 12px;border:1px solid #edf2f7;border-radius:10px;background:#fcfcff;margin-top:8px}
+.reply-result:first-child{margin-top:0}
 .reply-result.dragging{opacity:.45}
-.reply-result + .reply-result{margin-top:2px}
 .reply-result-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
-.reply-drag{color:#9f7aea;font-size:.78rem;cursor:grab;user-select:none;flex-shrink:0;padding:2px 4px;border:1px dashed #d6d3f5;border-radius:6px;line-height:1}
+.reply-drag{color:#6c63ff;font-size:.72rem;font-weight:700;cursor:grab;user-select:none;flex-shrink:0;padding:4px 8px;border:1px dashed #c4b5fd;border-radius:999px;line-height:1;background:#f7f5ff}
 .reply-drag:active{cursor:grabbing}
 .reply-result-main{flex:1;min-width:0}
 .reply-result-subject{font-size:.8rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -329,7 +328,9 @@ body.dark-mode .thread-count{background:#23283a;color:#c6b7ff}
 body.dark-mode .thread-updated{background:#1f2d3d;color:#90cdf4}
 body.dark-mode .keeper-remove{background:#2a1820;border-color:#6b2737;color:#feb2b2}
 body.dark-mode .keeper-remove:hover{background:#321c25;border-color:#fc8181;color:#fed7d7}
-body.dark-mode .reply-drag{border-color:#51607e;color:#c6b7ff}
+body.dark-mode .replies-count{background:#23283a;border-color:#51607e;color:#c6b7ff}
+body.dark-mode .reply-result{background:#151b27;border-color:#2a3245}
+body.dark-mode .reply-drag{border-color:#51607e;color:#c6b7ff;background:#23283a}
 body.dark-mode .thread-pill{background:#23283a;border-color:#51607e;color:#c6b7ff}
 body.dark-mode .matched-rules-tip,
 body.dark-mode .keepers-label,
@@ -801,7 +802,7 @@ function renderReplyResults() {
   list.innerHTML = replyResults.map(item => `
     <div class="reply-result" data-entry-id="${esc(item.reply_entry_id || item.original_entry_id)}">
       <div class="reply-result-top">
-        <span class="reply-drag" draggable="true" title="Drag to Watching">Drag</span>
+        <span class="reply-drag" draggable="true" title="Drag to Watching">Watch</span>
         <div class="reply-result-main">
           <div class="reply-result-subject">${esc(item.original_subject || item.reply_subject || '(No Subject)')}</div>
           <div class="reply-result-meta">Reply sent ${esc(item.sent_on)}${item.reply_to ? ` to ${esc(item.reply_to)}` : ''}</div>

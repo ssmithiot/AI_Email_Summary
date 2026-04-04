@@ -957,19 +957,19 @@ def summarize():
 
         client = OpenAI(api_key=api_key)
         try:
-            email_text = format_emails_for_claude(_build_summary_email_payload(emails, compact=False))
-            prompt = PROMPT_TEMPLATE.format(count=len(emails), emails=email_text)
+            email_text = format_emails_for_claude(_build_summary_email_payload(display_emails, compact=False))
+            prompt = PROMPT_TEMPLATE.format(count=len(display_emails), emails=email_text)
             summary_text = _request_summary_text(client, prompt)
             if not summary_text:
-                compact_text = format_emails_for_claude(_build_summary_email_payload(emails, compact=True))
-                compact_prompt = PROMPT_TEMPLATE.format(count=len(emails), emails=compact_text)
+                compact_text = format_emails_for_claude(_build_summary_email_payload(display_emails, compact=True))
+                compact_prompt = PROMPT_TEMPLATE.format(count=len(display_emails), emails=compact_text)
                 summary_text = _request_summary_text(client, compact_prompt)
             if not summary_text:
-                summary_text = _build_local_summary(emails)
+                summary_text = _build_local_summary(display_emails)
                 yield f"data: {json.dumps({'type': 'status', 'text': 'OpenAI was quiet, so a local fallback summary was generated.'})}\n\n"
             yield f"data: {json.dumps({'type': 'text', 'text': summary_text})}\n\n"
         except Exception as exc:
-            summary_text = _build_local_summary(emails)
+            summary_text = _build_local_summary(display_emails)
             yield f"data: {json.dumps({'type': 'status', 'text': f'OpenAI had trouble ({exc}). Showing a local fallback summary instead.'})}\n\n"
             yield f"data: {json.dumps({'type': 'text', 'text': summary_text})}\n\n"
 
