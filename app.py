@@ -89,7 +89,35 @@ def _annotate_threads(emails):
 
 
 def _display_emails(emails):
-    return [email for email in emails if email.get("thread_is_primary", True)]
+    primary_emails = [email for email in emails if email.get("thread_is_primary", True)]
+    grouped = defaultdict(list)
+    for email in primary_emails:
+        normalized_subject = email.get("normalized_subject") or normalize_subject(email.get("subject"))
+        sender = (email.get("from_email") or email.get("from") or "").strip().lower()
+        if normalized_subject and normalized_subject not in GENERIC_SUBJECTS:
+            grouped[f"{normalized_subject}|{sender}"].append(email)
+        else:
+            grouped[f"entry:{email.get('entry_id')}"].append(email)
+
+    deduped = []
+    for items in grouped.values():
+        best = sorted(
+            items,
+            key=lambda item: (
+                item.get("rule_score", 0),
+                bool(item.get("unread")),
+                item.get("received_sort") or "",
+                item.get("index", 0),
+            ),
+            reverse=True,
+        )[0]
+        deduped.append(dict(best))
+
+    deduped.sort(key=lambda item: item.get("index", 0))
+    for new_index, email in enumerate(deduped, start=1):
+        email["original_index"] = email.get("index", new_index)
+        email["index"] = new_index
+    return deduped
 
 
 def _build_local_summary(emails):
