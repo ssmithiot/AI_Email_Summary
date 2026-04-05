@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import time
+from math import ceil
 from datetime import datetime, timedelta
 
 import pythoncom
@@ -372,7 +373,9 @@ def get_outlook_emails(mode_config):
 
         emails = []
         stop_early = False
-        inspected_count = 0
+        multi_folder_budget = scan_cap
+        if mode in {"quantity", "unread"} and len(folders) > 1:
+            multi_folder_budget = max(1, ceil(scan_cap / len(folders)))
         for folder in folders:
             try:
                 messages = folder.Items
@@ -380,10 +383,11 @@ def get_outlook_emails(mode_config):
             except Exception:
                 continue
 
+            inspected_count = 0
             for msg in messages:
                 try:
                     if mode in {"quantity", "unread"}:
-                        if inspected_count >= scan_cap:
+                        if inspected_count >= multi_folder_budget:
                             stop_early = True
                             break
                         inspected_count += 1
@@ -405,12 +409,12 @@ def get_outlook_emails(mode_config):
                     if not _matches_text_filter(record, filter_text):
                         continue
                     emails.append(record)
-                    if mode == "quantity" and len(emails) >= max_count:
+                    if mode == "quantity" and len(folders) == 1 and len(emails) >= max_count:
                         stop_early = True
                         break
                 except Exception:
                     continue
-            if stop_early:
+            if stop_early and len(folders) == 1:
                 break
 
         emails.sort(key=lambda item: item.get("received_sort", ""), reverse=True)
