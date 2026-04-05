@@ -154,6 +154,27 @@ def _inbox_folders(namespace, include_all_inboxes=False):
     return folders or [namespace.GetDefaultFolder(6)]
 
 
+def list_available_inboxes():
+    namespace = get_outlook_namespace()
+    mailboxes = []
+    for index in range(1, namespace.Folders.Count + 1):
+        try:
+            store_root = namespace.Folders.Item(index)
+            inbox = store_root.Folders["Inbox"]
+            store_id = getattr(store_root, "EntryID", "") or ""
+            mailboxes.append(
+                {
+                    "id": store_id,
+                    "name": str(getattr(store_root, "Name", "") or f"Mailbox {index}"),
+                    "inbox_name": str(getattr(inbox, "Name", "") or "Inbox"),
+                    "item_count": int(getattr(inbox.Items, "Count", 0) or 0),
+                }
+            )
+        except Exception:
+            continue
+    return mailboxes
+
+
 def _recipient_strings(msg):
     to_str = ""
     cc_str = ""
@@ -319,7 +340,17 @@ def get_outlook_emails(mode_config):
             namespace = get_outlook_namespace()
         except RuntimeError:
             raise
-        inboxes = _inbox_folders(namespace, include_all_inboxes=bool(mode_config.get("include_all_inboxes")))
+        selected_mailbox_ids = {value for value in mode_config.get("mailbox_ids", []) if value}
+        include_all_inboxes = bool(mode_config.get("include_all_inboxes")) or bool(selected_mailbox_ids)
+        inboxes = _inbox_folders(namespace, include_all_inboxes=include_all_inboxes)
+        if selected_mailbox_ids:
+            filtered_inboxes = []
+            for inbox in inboxes:
+                parent = getattr(inbox, "Parent", None)
+                parent_id = getattr(parent, "EntryID", "") if parent is not None else ""
+                if parent_id in selected_mailbox_ids:
+                    filtered_inboxes.append(inbox)
+            inboxes = filtered_inboxes
         mode = mode_config["mode"]
         max_count = mode_config.get("count", 500)
         since = mode_config.get("since")

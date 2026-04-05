@@ -40,26 +40,16 @@ if not exist .env (
     copy .env.example .env >nul
     echo.
     echo ============================================
-    echo  ACTION REQUIRED: Add your OpenAI API key
+    echo  ACTION REQUIRED: Add your AI provider key
     echo ============================================
-    echo  1. Visit: https://platform.openai.com/api-keys
-    echo  2. Create a new secret key
-    echo  3. Open the .env file in this folder
-    echo  4. Replace sk-your-key-here with your real key
+    echo  1. Open the .env file in this folder
+    echo  2. Add your OpenAI key, Anthropic key, or both
+    echo  3. Save the file
+    echo  4. Pick your provider in the app dropdown
     echo ============================================
     notepad .env
 ) else (
     echo .env already exists - skipping.
-)
-
-findstr /b /c:"OPENAI_API_KEY=sk-your-key-here" .env >nul 2>&1
-if not errorlevel 1 (
-    echo.
-    echo ============================================
-    echo  REMINDER: Your OpenAI API key is still a placeholder
-    echo ============================================
-    echo  Open .env and replace sk-your-key-here with your real key.
-    echo ============================================
 )
 
 echo.

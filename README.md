@@ -1,6 +1,6 @@
 # Outlook Inbox Summarizer
 
-A lightweight Windows app that reads your Outlook inbox, scores emails with your custom rules, and generates an AI summary using OpenAI.
+A lightweight Windows app that reads your Outlook inbox, scores emails with your custom rules, and generates an AI summary using OpenAI or Anthropic. Anthropic Sonnet is the default provider.
 
 ## Beta MVP
 This is a beta MVP focused on the easiest local Windows install possible for friends and small-team testing.
@@ -27,21 +27,25 @@ Tip: add screenshots to this README later to make friend installs even easier.
 - Windows
 - Microsoft Outlook desktop app installed and signed in
 - Python 3.11+ installed
-- An OpenAI API key
+- An OpenAI or Anthropic API key
 
 ## Easiest Install
 1. Download or clone this folder.
 2. Make sure Outlook desktop is already open and signed in.
 3. Double-click `START_HERE.bat`.
 4. If setup appears, let it finish.
-5. When Notepad opens `.env`, paste your key so it looks like:
+5. When Notepad opens `.env`, add your provider key:
+   `DEFAULT_AI_PROVIDER=anthropic`
    `OPENAI_API_KEY=sk-...`
+   or
+   `ANTHROPIC_API_KEY=...`
 6. Save the file, close Notepad, and run `START_HERE.bat` again.
-7. Your browser should open the app at `http://localhost:5000`.
+7. Your browser should open the app at `http://localhost:5001`.
 
 If your friend only reads one section of this README, make it this one.
 
-## How To Get An OpenAI API Key
+## How To Get API Keys
+### OpenAI
 1. Sign in or create an account at:
    `https://platform.openai.com/`
 2. Open the API keys page:
@@ -50,6 +54,13 @@ If your friend only reads one section of this README, make it this one.
 4. Copy it immediately
 5. Put it in the `.env` file in this folder:
    `OPENAI_API_KEY=sk-...`
+
+### Anthropic
+1. Sign in or create an account at:
+   `https://console.anthropic.com/`
+2. Create an API key
+3. Put it in the `.env` file in this folder:
+   `ANTHROPIC_API_KEY=...`
 
 Important:
 - Keep your API key private
@@ -73,18 +84,23 @@ Important:
 - `watching.db` stores watched threads locally on your machine
 
 ## Files Your Friends Should Edit
-- `.env`: add their OpenAI API key
+- `.env`: add their OpenAI key, Anthropic key, or both
 - `rules.json`: optional, customize email scoring rules
+
+## Windows Installer
+- Use [build_installer.ps1](C:/projects/AI_Email_Summary/build_installer.ps1) to build the packaged app and installer.
+- The Inno Setup script lives at [installer/AI_Email_Summary.iss](C:/projects/AI_Email_Summary/installer/AI_Email_Summary.iss).
+- The installer prompts for OpenAI and Anthropic keys and writes `.env` during setup.
 
 ## Privacy Notes
 - Outlook emails are read from the local Outlook desktop app
 - Watched threads are stored locally in `watching.db`
-- Email content sent for summarization goes to OpenAI through the API
+- Email content sent for summarization goes to the selected AI provider through the API
 
 ## Troubleshooting
 - If setup fails, make sure Python is installed and available in PATH
 - If Outlook cannot be found, open Outlook and make sure you are signed in
-- If summaries fail, confirm your `OPENAI_API_KEY` is valid and not still `sk-your-key-here`
+- If summaries fail, confirm the selected provider key is valid and not still a placeholder
 - If larger inbox summaries struggle, the app now falls back to a local summary so you still get results
 - If a package is missing, rerun `setup.bat`
 - If `START_HERE.bat` stops after opening `.env`, save your key and run it again

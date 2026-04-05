@@ -5,3 +5,6 @@ __pycache__/
 watching.db
 .claude/
 *.log
+build/
+dist/
+dist-installer/

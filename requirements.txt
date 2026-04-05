@@ -1,3 +1,4 @@
+anthropic
 openai
 pywin32
 python-dotenv

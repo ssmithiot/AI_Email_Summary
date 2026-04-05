@@ -92,6 +92,24 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .btn-sm:disabled{opacity:.45;cursor:not-allowed}
 .btn-sm.danger:hover{border-color:#e53e3e;color:#e53e3e}
 .btn-group{display:flex;flex-direction:column;gap:6px}
+.provider-box{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.provider-box label{font-size:.77rem;font-weight:700;color:#666}
+.provider-box select{border:1.5px solid #e2e8f0;border-radius:7px;padding:6px 8px;font-size:.78rem;outline:none;background:#fff}
+.provider-box select:focus{border-color:#6c63ff}
+.provider-hint{font-size:.71rem;color:#8b90a7;line-height:1.45}
+.mailbox-picker{margin-top:10px;padding-top:10px;border-top:1px solid #eef2f7;display:flex;flex-direction:column;gap:8px}
+.mailbox-picker-header{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.mailbox-picker-title{font-size:.7rem;font-weight:700;color:#8b90a7}
+.mailbox-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mailbox-link{border:none;background:none;color:#6c63ff;font-size:.72rem;font-weight:700;cursor:pointer;padding:0}
+.mailbox-link:hover{text-decoration:underline}
+.mailbox-list{display:flex;flex-direction:column;gap:6px;max-height:120px;overflow-y:auto;padding-right:2px}
+.mailbox-item{display:flex;align-items:flex-start;gap:8px;font-size:.74rem;color:#666}
+.mailbox-item input{accent-color:#6c63ff;margin-top:2px}
+.mailbox-item-main{display:flex;flex-direction:column;gap:2px}
+.mailbox-name{font-weight:600;color:#4a5568}
+.mailbox-meta{font-size:.7rem;color:#8b90a7}
+.mailbox-empty{font-size:.72rem;color:#8b90a7;line-height:1.45}
 .auto-refresh-box{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
 .auto-refresh-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .auto-refresh-label{font-size:.77rem;font-weight:700;color:#666}
@@ -409,7 +427,7 @@ body.dark-mode .modal-overlay{background:rgba(0,0,0,.65)}
   <div class="topbar">
     <div class="topbar-left">
       <h1>Outlook Inbox Summarizer</h1>
-      <span class="topbar-sub">Emails scored and sorted by your rules before OpenAI summarizes them into action-ready guidance.</span>
+      <span class="topbar-sub">Emails scored and sorted by your rules before the selected AI summarizes them into action-ready guidance.</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px"><button class="icon-btn" id="theme-btn" onclick="toggleTheme()">Dark Mode</button><button class="icon-btn" onclick="openRules()">Rules</button></div>
   </div>
@@ -479,7 +497,6 @@ body.dark-mode .modal-overlay{background:rgba(0,0,0,.65)}
         <div class="scan-scope-content">
           <div class="scan-scope-row">
             <label class="scan-scope-option"><input type="checkbox" id="include-subfolders"> Include Inbox subfolders</label>
-            <label class="scan-scope-option"><input type="checkbox" id="include-all-inboxes"> Scan all account inboxes</label>
             <div class="scan-cap-wrap">
               <label for="scan-cap">Scan cap</label>
               <select id="scan-cap">
@@ -491,6 +508,18 @@ body.dark-mode .modal-overlay{background:rgba(0,0,0,.65)}
             </div>
           </div>
           <div class="scan-scope-hint">Scan cap applies to Most Recent and Unread scans when we are searching for matches. Default is 100 recent emails inspected.</div>
+          <div class="mailbox-picker">
+            <div class="mailbox-picker-header">
+              <div class="mailbox-picker-title">Mailboxes</div>
+              <div class="mailbox-actions">
+                <button class="mailbox-link" type="button" onclick="refreshMailboxes()">Refresh</button>
+                <button class="mailbox-link" type="button" onclick="setAllMailboxes(true)">Select all</button>
+                <button class="mailbox-link" type="button" onclick="setAllMailboxes(false)">Clear</button>
+              </div>
+            </div>
+            <div class="mailbox-empty" id="mailbox-summary">Loading Outlook mailboxes...</div>
+            <div class="mailbox-list" id="mailbox-list"></div>
+          </div>
           <div class="date-filter-box">
             <div class="date-filter-header">
               <label>Search criteria</label>
@@ -522,6 +551,15 @@ body.dark-mode .modal-overlay{background:rgba(0,0,0,.65)}
           </div>
           <datalist id="contact-suggestions"></datalist>
         </div>
+      </div>
+
+      <div class="provider-box">
+        <label for="provider-select">AI provider</label>
+        <select id="provider-select">
+          <option value="anthropic" {% if default_provider == 'anthropic' %}selected{% endif %}>Anthropic Sonnet</option>
+          <option value="openai" {% if default_provider == 'openai' %}selected{% endif %}>OpenAI</option>
+        </select>
+        <div class="provider-hint">Choose which API writes the summary. If it fails, the app still falls back to a local summary.</div>
       </div>
 
       <!-- Action buttons -->
@@ -729,6 +767,7 @@ let threadsWithFreshActivity = new Set();
 let searchSuggestionsLoaded = false;
 let searchSuggestionTimer = null;
 let lastSuggestionQuery = '';
+let mailboxOptions = [];
 
 function applyTheme() {
   document.body.classList.toggle('dark-mode', darkMode);
@@ -874,6 +913,71 @@ async function refreshSearchSuggestions() {
   if (ok) showToast('Suggestions refreshed from Outlook');
 }
 
+function selectedMailboxIds() {
+  return Array.from(document.querySelectorAll('.mailbox-check:checked')).map(input => input.value);
+}
+
+function updateMailboxSummary() {
+  const summary = document.getElementById('mailbox-summary');
+  const selected = selectedMailboxIds();
+  if (!mailboxOptions.length) {
+    summary.textContent = 'No Outlook mailboxes found yet.';
+    return;
+  }
+  if (!selected.length || selected.length === mailboxOptions.length) {
+    summary.textContent = `Scanning all ${mailboxOptions.length} mailbox${mailboxOptions.length !== 1 ? 'es' : ''}.`;
+    return;
+  }
+  summary.textContent = `Scanning ${selected.length} selected mailbox${selected.length !== 1 ? 'es' : ''}.`;
+}
+
+function renderMailboxes() {
+  const list = document.getElementById('mailbox-list');
+  list.innerHTML = '';
+  if (!mailboxOptions.length) {
+    updateMailboxSummary();
+    return;
+  }
+  mailboxOptions.forEach(mailbox => {
+    const row = document.createElement('label');
+    row.className = 'mailbox-item';
+    row.innerHTML = `
+      <input class="mailbox-check" type="checkbox" value="${esc(mailbox.id)}" checked>
+      <div class="mailbox-item-main">
+        <div class="mailbox-name">${esc(mailbox.name)}</div>
+        <div class="mailbox-meta">${esc(mailbox.inbox_name || 'Inbox')} - ${mailbox.item_count} item${mailbox.item_count !== 1 ? 's' : ''}</div>
+      </div>`;
+    const check = row.querySelector('.mailbox-check');
+    check.addEventListener('change', updateMailboxSummary);
+    list.appendChild(row);
+  });
+  updateMailboxSummary();
+}
+
+async function refreshMailboxes() {
+  const summary = document.getElementById('mailbox-summary');
+  summary.textContent = 'Refreshing Outlook mailboxes...';
+  try {
+    const res = await fetch('/mailboxes');
+    const data = await res.json();
+    if (!data.ok) {
+      summary.textContent = 'Could not load Outlook mailboxes.';
+      showToast('Warning: ' + data.error);
+      return;
+    }
+    mailboxOptions = data.mailboxes || [];
+    renderMailboxes();
+  } catch {
+    summary.textContent = 'Could not load Outlook mailboxes.';
+    showToast('Warning: Could not load Outlook mailboxes');
+  }
+}
+
+function setAllMailboxes(checked) {
+  document.querySelectorAll('.mailbox-check').forEach(input => { input.checked = checked; });
+  updateMailboxSummary();
+}
+
 // â”€â”€â”€ Mode / range â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function selectMode(mode, el) {
   currentMode = mode;
@@ -897,9 +1001,9 @@ function selectRange(range, el) {
 function buildUrl(modeOverride) {
   const activeMode = modeOverride || currentMode;
   const p = new URLSearchParams({mode: activeMode});
+  p.set('provider', document.getElementById('provider-select').value || 'anthropic');
   if (isAdvancedScanEnabled()) {
     if (document.getElementById('include-subfolders').checked) p.set('include_subfolders', '1');
-    if (document.getElementById('include-all-inboxes').checked) p.set('include_all_inboxes', '1');
     p.set('scan_cap', document.getElementById('scan-cap').value || '100');
     p.set('filter_from', document.getElementById('date-filter-from').value.trim());
     p.set('filter_to', document.getElementById('date-filter-to').value.trim());
@@ -907,6 +1011,9 @@ function buildUrl(modeOverride) {
     p.set('filter_text', document.getElementById('date-filter-text').value.trim());
     if (document.getElementById('date-filter-unread').checked) p.set('filter_unread', '1');
     if (document.getElementById('date-filter-attach').checked) p.set('filter_attach', '1');
+    const selected = selectedMailboxIds();
+    if (!selected.length || selected.length === mailboxOptions.length) p.set('include_all_inboxes', '1');
+    else selected.forEach(id => p.append('mailbox_id', id));
   }
   if (activeMode === 'date') {
     p.set('range', currentRange);
@@ -1583,6 +1690,7 @@ initTheme();
 initAutoRefresh();
 setDefaultCustomDates();
 initSearchSuggestionInputs();
+refreshMailboxes();
 fetchWatching().then(renderKeepers);
 </script>
 </body>

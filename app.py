@@ -8,6 +8,7 @@ import webbrowser
 from collections import defaultdict
 from datetime import datetime, timedelta
 
+from anthropic import Anthropic
 import pywintypes
 import win32com.client
 import win32gui
@@ -21,6 +22,7 @@ from summarize_inbox import (
     format_emails_for_claude,
     get_outlook_emails,
     get_outlook_namespace,
+    list_available_inboxes,
     normalize_message_id,
     normalize_subject,
 )
@@ -28,6 +30,7 @@ from summarize_inbox import (
 BASE_DIR = os.path.dirname(__file__)
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 app = Flask(__name__)
+APP_PORT = 5001
 WATCHING_DB = os.path.join(BASE_DIR, "watching.db")
 GENERIC_SUBJECTS = {"", "(no subject)", "hi", "hello", "thanks", "thank you", "question", "follow up"}
 
@@ -205,6 +208,7 @@ def build_mode_config(args):
     mode = args.get("mode", "quantity")
     include_subfolders = str(args.get("include_subfolders", "")).lower() in {"1", "true", "yes", "on"}
     include_all_inboxes = str(args.get("include_all_inboxes", "")).lower() in {"1", "true", "yes", "on"}
+    mailbox_ids = [value.strip() for value in args.getlist("mailbox_id") if value and value.strip()]
     try:
         scan_cap = max(25, min(1000, int(args.get("scan_cap", 100))))
     except ValueError:
@@ -217,7 +221,12 @@ def build_mode_config(args):
     attachments_only = str(args.get("filter_attach", "")).lower() in {"1", "true", "yes", "on"}
 
     def apply_common_filters(label):
-        if include_all_inboxes:
+        if mailbox_ids:
+            if include_all_inboxes:
+                label += " across selected inboxes"
+            else:
+                label += " in selected inboxes"
+        elif include_all_inboxes:
             label += " across all account inboxes"
         if filter_from:
             label += f" from '{filter_from}'"
@@ -248,6 +257,7 @@ def build_mode_config(args):
             "status_text": scanning_status(apply_common_filters(label)),
             "include_subfolders": include_subfolders,
             "include_all_inboxes": include_all_inboxes,
+            "mailbox_ids": mailbox_ids,
             "filter_text": filter_text,
             "filter_from": filter_from,
             "filter_to": filter_to,
@@ -296,6 +306,7 @@ def build_mode_config(args):
             "status_text": scanning_status(apply_common_filters(label)),
             "include_subfolders": include_subfolders,
             "include_all_inboxes": include_all_inboxes,
+            "mailbox_ids": mailbox_ids,
             "filter_text": filter_text,
             "filter_from": filter_from,
             "filter_to": filter_to,
@@ -319,6 +330,7 @@ def build_mode_config(args):
         "status_text": scanning_status(apply_common_filters(label)),
         "include_subfolders": include_subfolders,
         "include_all_inboxes": include_all_inboxes,
+        "mailbox_ids": mailbox_ids,
         "filter_text": filter_text,
         "filter_from": filter_from,
         "filter_to": filter_to,
@@ -1214,22 +1226,68 @@ def _build_summary_email_payload(emails, compact=False):
     return prepared
 
 
-def _request_summary_text(client, prompt):
-    response = client.responses.create(model="gpt-5", input=prompt, max_output_tokens=3000)
+def _request_openai_summary_text(client, prompt, model):
+    response = client.responses.create(model=model, input=prompt, max_output_tokens=3000)
     return _extract_response_text(response).strip()
+
+
+def _request_anthropic_summary_text(client, prompt, model):
+    response = client.messages.create(
+        model=model,
+        max_tokens=3000,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    parts = []
+    for item in getattr(response, "content", []) or []:
+        if getattr(item, "type", "") == "text":
+            text = getattr(item, "text", "")
+            if text:
+                parts.append(text)
+    return "".join(parts).strip()
+
+
+def _summary_provider_config(args):
+    default_provider = (os.getenv("DEFAULT_AI_PROVIDER", "") or "anthropic").strip().lower()
+    if default_provider not in {"openai", "anthropic"}:
+        default_provider = "anthropic"
+
+    provider = (args.get("provider", default_provider) or default_provider).strip().lower()
+    if provider not in {"openai", "anthropic"}:
+        provider = default_provider
+
+    if provider == "anthropic":
+        api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+        model = (os.getenv("ANTHROPIC_MODEL", "") or "claude-sonnet-4-20250514").strip()
+        display_name = "Anthropic Sonnet"
+    else:
+        api_key = os.getenv("OPENAI_API_KEY", "").strip()
+        model = (os.getenv("OPENAI_MODEL", "") or "gpt-4.1").strip()
+        display_name = "OpenAI"
+
+    return {
+        "provider": provider,
+        "api_key": api_key,
+        "model": model,
+        "display_name": display_name,
+    }
 
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    default_provider = (os.getenv("DEFAULT_AI_PROVIDER", "") or "anthropic").strip().lower()
+    if default_provider not in {"openai", "anthropic"}:
+        default_provider = "anthropic"
+    return render_template("index.html", default_provider=default_provider)
 
 
 @app.route("/summarize")
 def summarize():
     def generate():
-        api_key = os.getenv("OPENAI_API_KEY")
+        provider_config = _summary_provider_config(request.args)
+        api_key = provider_config["api_key"]
         if not api_key:
-            yield f"data: {json.dumps({'type': 'error', 'text': 'OPENAI_API_KEY not set in .env file.'})}\n\n"
+            key_name = "ANTHROPIC_API_KEY" if provider_config["provider"] == "anthropic" else "OPENAI_API_KEY"
+            yield f"data: {json.dumps({'type': 'error', 'text': f'{key_name} not set in .env file.'})}\n\n"
             return
 
         mode_config = build_mode_config(request.args)
@@ -1279,25 +1337,39 @@ def summarize():
         refresh_watched_threads(emails)
         display_emails = _display_emails(emails)
 
-        found_msg = json.dumps({"type": "status", "text": f"Found {len(emails)} emails across {len(display_emails)} active threads. Summarizing with OpenAI..."})
+        found_msg = json.dumps({"type": "status", "text": f"Found {len(emails)} emails across {len(display_emails)} active threads. Summarizing with {provider_config['display_name']}..."})
         yield f"data: {found_msg}\n\n"
 
-        client = OpenAI(api_key=api_key)
         try:
+            if provider_config["provider"] == "anthropic":
+                client = Anthropic(api_key=api_key)
+                request_summary = lambda prompt: _request_anthropic_summary_text(client, prompt, provider_config["model"])
+            else:
+                client = OpenAI(api_key=api_key)
+                request_summary = lambda prompt: _request_openai_summary_text(client, prompt, provider_config["model"])
+
             email_text = format_emails_for_claude(_build_summary_email_payload(display_emails, compact=False))
             prompt = PROMPT_TEMPLATE.format(count=len(display_emails), emails=email_text)
-            summary_text = _request_summary_text(client, prompt)
+            summary_text = request_summary(prompt)
             if not summary_text:
                 compact_text = format_emails_for_claude(_build_summary_email_payload(display_emails, compact=True))
                 compact_prompt = PROMPT_TEMPLATE.format(count=len(display_emails), emails=compact_text)
-                summary_text = _request_summary_text(client, compact_prompt)
+                summary_text = request_summary(compact_prompt)
             if not summary_text:
                 summary_text = _build_local_summary(display_emails)
-                yield f"data: {json.dumps({'type': 'status', 'text': 'OpenAI was quiet, so a local fallback summary was generated.'})}\n\n"
+                quiet_msg = {
+                    "type": "status",
+                    "text": f"{provider_config['display_name']} was quiet, so a local fallback summary was generated.",
+                }
+                yield f"data: {json.dumps(quiet_msg)}\n\n"
             yield f"data: {json.dumps({'type': 'text', 'text': summary_text})}\n\n"
         except Exception as exc:
             summary_text = _build_local_summary(display_emails)
-            yield f"data: {json.dumps({'type': 'status', 'text': f'OpenAI had trouble ({exc}). Showing a local fallback summary instead.'})}\n\n"
+            fallback_msg = {
+                "type": "status",
+                "text": f"{provider_config['display_name']} had trouble ({exc}). Showing a local fallback summary instead.",
+            }
+            yield f"data: {json.dumps(fallback_msg)}\n\n"
             yield f"data: {json.dumps({'type': 'text', 'text': summary_text})}\n\n"
 
         card_data = [
@@ -1581,15 +1653,23 @@ def search_suggestions():
         return jsonify({"ok": False, "error": _friendly_outlook_error(exc, "read Outlook contacts")}), 500
 
 
+@app.route("/mailboxes")
+def get_mailboxes():
+    try:
+        return jsonify({"ok": True, "mailboxes": list_available_inboxes()})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": _friendly_outlook_error(exc, "read Outlook mailboxes")}), 500
+
+
 @app.route("/favicon.ico")
 def favicon():
     return ("", 204)
 
 
 def open_browser():
-    webbrowser.open("http://localhost:5000")
+    webbrowser.open(f"http://localhost:{APP_PORT}")
 
 
 if __name__ == "__main__":
     threading.Timer(1.0, open_browser).start()
-    app.run(debug=False, port=5000)
+    app.run(debug=False, port=APP_PORT)
